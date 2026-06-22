@@ -1,0 +1,21 @@
+# ============================================================
+# Dependencias del proyecto: Monitoreo SQL Server + WhatsApp
+# ============================================================
+
+# Conexión a SQL Server
+pyodbc==4.0.39
+
+# Programación de tareas
+schedule==1.2.0
+
+# Peticiones HTTP para APIs de WhatsApp
+requests==2.31.0
+
+# Manejo de variables de entorno
+python-dotenv==1.0.0
+
+# Manejo de zonas horarias
+pytz==2023.3
+
+# Logging mejorado (opcional, colorama para Windows)
+colorama==0.4.6
