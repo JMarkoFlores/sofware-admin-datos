@@ -1,6 +1,9 @@
 flask==3.0.3
 flask-cors==4.0.1
+flask-sqlalchemy==3.1.1
+sqlalchemy==2.0.31
 pyodbc==5.1.0
 python-dotenv==1.0.1
 requests==2.32.3
 apscheduler==3.10.4
+werkzeug==3.0.3

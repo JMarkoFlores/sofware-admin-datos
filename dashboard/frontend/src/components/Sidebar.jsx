@@ -3,19 +3,24 @@ import React from 'react'
 function Sidebar({ activeModule, setActiveModule }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'productos', label: 'Productos' },
-    { id: 'documentos', label: 'Documentos' },
-    { id: 'disparador', label: 'Disparador' },
+    { id: 'libros', label: 'Libros' },
+    { id: 'autores', label: 'Autores' },
+    { id: 'categorias', label: 'Categorías' },
+    { id: 'lectores', label: 'Lectores' },
+    { id: 'prestamos', label: 'Préstamos' },
+    { id: 'devoluciones', label: 'Devoluciones' },
+    { id: 'multas', label: 'Multas' },
+    { id: 'usuarios', label: 'Usuarios del Sistema' },
     { id: 'reportes', label: 'Reportes' },
-    { id: 'mantenimiento', label: 'Mantenimiento' },
-    { id: 'configuracion', label: 'Configuracion' },
+    { id: 'auditoria', label: 'Auditoría' },
+    { id: 'disparador', label: 'Disparador' },
   ]
 
   return (
     <aside className="sidebar">
       <div className="brand">
-        <h2>TENEBROSA</h2>
-        <span>Tenebrosa System</span>
+        <h2>BIBLIOUNI</h2>
+        <span>Sistema de Biblioteca Universitaria</span>
       </div>
       <nav className="nav-menu">
         {menuItems.map(item => (

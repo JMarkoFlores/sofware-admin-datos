@@ -1,10 +1,35 @@
 import React, { useState } from 'react'
 import Sidebar from './components/Sidebar'
+import Dashboard from './components/Dashboard'
+import Libros from './components/Libros'
+import Autores from './components/Autores'
+import Categorias from './components/Categorias'
+import Lectores from './components/Lectores'
+import Prestamos from './components/Prestamos'
+import Devoluciones from './components/Devoluciones'
+import Multas from './components/Multas'
+import UsuariosSistema from './components/UsuariosSistema'
+import Reportes from './components/Reportes'
+import Auditoria from './components/Auditoria'
 import Disparador from './components/Disparador'
-import Banco from './components/Banco'
+
+const moduleTitles = {
+  dashboard: 'Dashboard',
+  libros: 'Gestión de Libros',
+  autores: 'Gestión de Autores',
+  categorias: 'Gestión de Categorías',
+  lectores: 'Gestión de Lectores',
+  prestamos: 'Gestión de Préstamos',
+  devoluciones: 'Gestión de Devoluciones',
+  multas: 'Gestión de Multas',
+  usuarios: 'Usuarios del Sistema',
+  reportes: 'Reportes',
+  auditoria: 'Auditoría',
+  disparador: 'Disparador / WhatsApp',
+}
 
 function App() {
-  const [activeModule, setActiveModule] = useState('disparador')
+  const [activeModule, setActiveModule] = useState('dashboard')
 
   return (
     <div className="app">
@@ -13,7 +38,7 @@ function App() {
         <header className="top-bar">
           <div className="breadcrumb">
             <span className="panel-title">Panel administrativo</span>
-            <h1>{activeModule === 'disparador' ? 'Disparador / WhatsApp' : 'Banco'}</h1>
+            <h1>{moduleTitles[activeModule] || activeModule}</h1>
           </div>
           <div className="user-actions">
             <div className="search-box">
@@ -30,15 +55,25 @@ function App() {
               </svg>
             </button>
             <div className="user-profile">
-              <div className="avatar">TJ</div>
+              <div className="avatar">AD</div>
               <span>Admin</span>
             </div>
           </div>
         </header>
 
         <div className="content-area">
+          {activeModule === 'dashboard' && <Dashboard />}
+          {activeModule === 'libros' && <Libros />}
+          {activeModule === 'autores' && <Autores />}
+          {activeModule === 'categorias' && <Categorias />}
+          {activeModule === 'lectores' && <Lectores />}
+          {activeModule === 'prestamos' && <Prestamos />}
+          {activeModule === 'devoluciones' && <Devoluciones />}
+          {activeModule === 'multas' && <Multas />}
+          {activeModule === 'usuarios' && <UsuariosSistema />}
+          {activeModule === 'reportes' && <Reportes />}
+          {activeModule === 'auditoria' && <Auditoria />}
           {activeModule === 'disparador' && <Disparador />}
-          {activeModule === 'banco' && <Banco />}
         </div>
       </main>
     </div>
