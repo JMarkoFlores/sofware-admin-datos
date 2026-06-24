@@ -1,6 +1,6 @@
 """
 Blueprint del módulo Disparador.
-PRESERVADO INTACTO — Se conecta a TenebrosaOLTP vía db_tenebrosa.py y whatsapp.py.
+Se conecta a Bibliouni vía db_tenebrosa.py y whatsapp.py.
 """
 
 import os

@@ -2,7 +2,7 @@
 Módulo de conexión a SQL Server
 ==============================
 
-Obtiene la cantidad de tablas y sus nombres de la base de datos TenebrosaOLTP.
+Obtiene la cantidad de tablas y sus nombres de la base de datos Bibliouni.
 """
 
 import os
@@ -11,12 +11,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_SERVER = os.getenv('DB_SERVER', 'Jeanmarko')
-DB_NAME = os.getenv('DB_NAME', 'TenebrosaOLTP')
-DB_USER = os.getenv('DB_USER', '')
-DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-DB_DRIVER = os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server')
-DB_TRUSTED = os.getenv('DB_TRUSTED_CONNECTION', 'yes').lower()
+DB_SERVER = os.getenv('BIBLIOUNI_SERVER', 'Jeanmarko')
+DB_NAME = os.getenv('BIBLIOUNI_DB', 'Bibliouni')
+DB_USER = os.getenv('BIBLIOUNI_USER', '')
+DB_PASSWORD = os.getenv('BIBLIOUNI_PASSWORD', '')
+DB_DRIVER = os.getenv('BIBLIOUNI_DRIVER', 'ODBC Driver 17 for SQL Server')
+DB_TRUSTED = os.getenv('BIBLIOUNI_TRUSTED_CONNECTION', 'yes').lower()
 
 
 def get_connection_string():

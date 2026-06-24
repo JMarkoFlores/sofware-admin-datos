@@ -195,7 +195,7 @@ function Disparador() {
           <p className="description">
             Al iniciar, se enviara un mensaje de WhatsApp inmediatamente y luego
             cada 1 minuto con la cantidad de tablas y sus nombres de la base de
-            datos <strong>TenebrosaOLTP</strong>.
+            datos <strong>Bibliouni</strong>.
           </p>
           <ul className="feature-list">
             <li>Numero de destino editable</li>

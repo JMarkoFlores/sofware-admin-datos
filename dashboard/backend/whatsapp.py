@@ -71,7 +71,7 @@ def format_tables_message(tables_info):
     names = tables_info.get('names', [])
     
     if count == 0:
-        return "No se encontraron tablas en la base de datos TenebrosaOLTP."
+        return "No se encontraron tablas en la base de datos Bibliouni."
     
     # Limitar lista si es muy larga
     if len(names) > 20:
@@ -81,7 +81,7 @@ def format_tables_message(tables_info):
     
     message = (
         f"📊 *Reporte de Base de Datos*\n\n"
-        f"Base de datos: *TenebrosaOLTP*\n"
+        f"Base de datos: *Bibliouni*\n"
         f"Total de tablas: *{count}*\n\n"
         f"*Tablas:*\n{names_text}"
     )

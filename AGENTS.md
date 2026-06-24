@@ -55,7 +55,7 @@ dashboard/backend/
 ```
 
 ## 4. Reglas Críticas
-1. **NO MODIFICAR** la lógica, endpoints ni frontend del módulo **Disparador**. Este módulo se conecta exclusivamente a `TenebrosaOLTP` vía `db_tenebrosa.py` + `whatsapp.py`.
+1. El módulo **Disparador** monitorea la base de datos **Bibliouni** vía `db_tenebrosa.py` + `whatsapp.py`. Envia reportes periódicos por WhatsApp con información de tablas y registros.
 2. **NO MODIFICAR** `docker-compose.yml` (PostgreSQL, Redis, Evolution API deben quedar igual).
 3. Todos los demás módulos se conectan a la base de datos `Bibliouni` en SQL Server usando SQLAlchemy ORM.
 4. Si se necesita agregar un campo o tabla nueva, actualizar: modelo → migración (si aplica) → seeder → service → route → frontend.
