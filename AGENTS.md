@@ -42,7 +42,11 @@ dashboard/backend/
 │   ├── auditoria.py       # Blueprint: /api/auditoria
 │   ├── dashboard.py       # Blueprint: /api/dashboard
 │   └── disparador.py      # Blueprint: /api/* (preservado intacto)
-├── services/              # Lógica de negocio
+├── services/
+│   ├── libro_service.py
+│   ├── prestamo_service.py
+│   ├── reporte_service.py
+│   └── backup_service.py  # Verificación y ejecución de backups Bibliouni
 ├── repositories/          # Consultas complejas / raw SQL cuando se requiera
 ├── database/
 │   ├── init_db.py         # Crea tablas de Bibliouni con SQLAlchemy
@@ -55,7 +59,9 @@ dashboard/backend/
 ```
 
 ## 4. Reglas Críticas
-1. El módulo **Disparador** monitorea la base de datos **Bibliouni** vía `db_tenebrosa.py` + `whatsapp.py`. Envia reportes periódicos por WhatsApp con información de tablas y registros.
+1. El módulo **Disparador** incluye dos submódulos independientes:
+   - **Disparador de Mensajes:** monitorea la base de datos **Bibliouni** vía `db_tenebrosa.py` + `whatsapp.py`. Envia reportes periódicos por WhatsApp con información de tablas y registros.
+   - **Disparador de Backup:** verifica diariamente a las 7:00 AM (America/Lima) si existe un backup de Bibliouni. Si no existe, envía alerta por WhatsApp y permite ejecutar el backup remotamente respondiendo `RESUELVE BACKUP`.
 2. **NO MODIFICAR** `docker-compose.yml` (PostgreSQL, Redis, Evolution API deben quedar igual).
 3. Todos los demás módulos se conectan a la base de datos `Bibliouni` en SQL Server usando SQLAlchemy ORM.
 4. Si se necesita agregar un campo o tabla nueva, actualizar: modelo → migración (si aplica) → seeder → service → route → frontend.
@@ -97,12 +103,15 @@ python database/seeders/seed_all.py
 - `/api/reportes/*` — Reportes varios
 - `/api/auditoria` — Historial de auditoría
 - `/api/start`, `/api/stop`, `/api/status`, `/api/tables`, `/api/test-send` — Disparador WhatsApp (INTACTO)
+- `/api/backup/start`, `/api/backup/stop`, `/api/backup/status` — Monitoreo de Backup
+- `/api/backup/webhook` — Webhook para comandos entrantes de WhatsApp (`RESUELVE BACKUP`)
 
 ## 8. Variables de Entorno (.env)
 Ver `dashboard/backend/.env` y `.env.example`:
 - `BIBLIOUNI_SERVER`, `BIBLIOUNI_DB`, `BIBLIOUNI_DRIVER`, `BIBLIOUNI_TRUSTED_CONNECTION` — Conexión a Bibliouni
 - `DB_SERVER`, `DB_NAME`, `DB_DRIVER`, `DB_TRUSTED_CONNECTION` — Conexión a TenebrosaOLTP (Disparador)
 - `EVOLUTION_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`, `WHATSAPP_DESTINATION` — Evolution API
+- `BACKUP_PATH`, `BACKUP_CHECK_HOUR`, `BACKUP_CHECK_MINUTE`, `BACKUP_TIMEZONE`, `WEBHOOK_URL` — Monitoreo de Backup
 
 ## 9. Frontend
 ```
@@ -120,7 +129,7 @@ dashboard/frontend/src/
 │   ├── UsuariosSistema.jsx
 │   ├── Reportes.jsx
 │   ├── Auditoria.jsx
-│   └── Disparador.jsx      # INTACTO
+│   └── Disparador.jsx      # Disparador de Mensajes + Disparador de Backup
 ├── App.jsx
 └── styles.css
 ```

@@ -54,6 +54,10 @@ app.register_blueprint(auditoria.bp)
 app.register_blueprint(dashboard.bp)
 app.register_blueprint(disparador.bp)
 
+# Pasar referencia de app al disparador para que los jobs de APScheduler
+# puedan ejecutar código Flask (db.session) dentro de app_context
+disparador.set_flask_app(app)
+
 
 @app.route('/api/health', methods=['GET'])
 def health():
