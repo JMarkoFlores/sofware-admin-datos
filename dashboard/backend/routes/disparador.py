@@ -22,6 +22,7 @@ from services.backup_service import (
     enviar_alerta_backup_pendiente,
     procesar_comando_backup,
 )
+from services.fill_factor_service import procesar_comando_fill_factor
 from config.settings import Config
 
 bp = Blueprint('disparador', __name__)
@@ -392,7 +393,9 @@ def test_backup_check():
 def backup_webhook():
     """
     Recibe mensajes entrantes de Evolution API.
-    Procesa el comando RESUELVE BACKUP.
+    Procesa los siguientes comandos:
+    - RESUELVE BACKUP: ejecuta un backup manual de Bibliouni.
+    - FACTOR LLENADO <N>: reconstruye índices con el fill factor indicado.
     """
     payload = request.get_json() or {}
 
@@ -414,13 +417,70 @@ def backup_webhook():
 
     print(f"[{datetime.now()}] Webhook recibido de {numero_remoto}: {text}")
 
+    texto_upper = text.strip().upper()
+
     # Ejecutar procesamiento dentro de app_context para que
     # log_auditoria y db.session funcionen correctamente
-    if _flask_app:
-        with _flask_app.app_context():
-            resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+    if texto_upper.startswith('FACTOR LLENADO'):
+        # Comando de fill factor: FACTOR LLENADO <porcentaje>
+        if _flask_app:
+            with _flask_app.app_context():
+                resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+        else:
+            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+            resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
     else:
-        print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-        resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        # Comando de backup: RESUELVE BACKUP (u otros futuros)
+        if _flask_app:
+            with _flask_app.app_context():
+                resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        else:
+            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+            resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
 
     return jsonify(resultado), 200
+
+
+# ===========================================================================
+# FACTOR DE LLENADO - ENDPOINT DE PRUEBA
+# ===========================================================================
+
+@bp.route('/api/fill-factor/test', methods=['GET'])
+def test_fill_factor():
+    """
+    Endpoint de prueba: ejecuta el rebuild de índices con el fill factor
+    indicado como query parameter, sin necesidad de enviar WhatsApp.
+
+    Query params:
+        fill_factor (int): Porcentaje de llenado (1-100). Default: 80.
+    """
+    try:
+        fill_factor = int(request.args.get('fill_factor', 80))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'fill_factor debe ser un número entero'}), 400
+
+    if not (1 <= fill_factor <= 100):
+        return jsonify({'success': False, 'message': f'fill_factor debe estar entre 1 y 100, recibido: {fill_factor}'}), 400
+
+    print(f"[{datetime.now()}] TEST FILL FACTOR: ejecutando rebuild con FILLFACTOR={fill_factor}...")
+
+    if _flask_app:
+        with _flask_app.app_context():
+            resultado = procesar_comando_fill_factor(
+                f'FACTOR LLENADO {fill_factor}',
+                backup_destination,
+                backup_destination
+            )
+    else:
+        resultado = procesar_comando_fill_factor(
+            f'FACTOR LLENADO {fill_factor}',
+            backup_destination,
+            backup_destination
+        )
+
+    print(f"[{datetime.now()}] TEST FILL FACTOR Resultado: {resultado}")
+    return jsonify({
+        'success': resultado.get('exito', False),
+        'fill_factor': fill_factor,
+        'result': resultado
+    })
