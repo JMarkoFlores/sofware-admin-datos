@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import axios from 'axios'
-import { FiBook, FiPlus, FiX, FiEdit2, FiTrash2, FiSearch, FiFilter, FiCalendar, FiHash, FiCopy } from 'react-icons/fi'
+import { FiBook, FiPlus, FiX, FiEdit2, FiTrash2, FiSearch, FiFilter, FiCalendar, FiHash, FiCopy, FiUsers } from 'react-icons/fi'
 
 function Libros() {
   const [items, setItems] = useState([])

@@ -814,13 +814,21 @@ body {
   display: flex; align-items: center; gap: 5px;
 }
 .m-form-group input,
-.m-form-group select {
+.m-form-group select,
+.m-form-group textarea {
   padding: 10px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px;
   font-size: 14px; outline: none; background: #f8fafc; color: #0f172a;
   transition: border-color .2s, background .2s, box-shadow .2s; width: 100%;
 }
+.m-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.5;
+}
 .m-form-group input:focus,
-.m-form-group select:focus {
+.m-form-group select:focus,
+.m-form-group textarea:focus {
   border-color: #6366f1; background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,.12);
 }
 .m-pass-wrap { position: relative; }
