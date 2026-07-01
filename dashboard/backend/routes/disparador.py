@@ -67,8 +67,7 @@ frag_is_running = False
 frag_last_check = None
 frag_last_result = None
 frag_umbral = int(os.getenv('FRAG_UMBRAL', '30'))
-FRAG_CHECK_HOUR = int(os.getenv('FRAG_CHECK_HOUR', '8'))
-FRAG_CHECK_MINUTE = int(os.getenv('FRAG_CHECK_MINUTE', '0'))
+FRAG_INTERVAL_MINUTES = int(os.getenv('FRAG_INTERVAL_MINUTES', '60'))
 
 
 def set_flask_app(app):
@@ -567,11 +566,8 @@ def start_frag_scheduler():
 
     scheduler.add_job(
         check_fragmentation_daily,
-        trigger=CronTrigger(
-            hour=FRAG_CHECK_HOUR,
-            minute=FRAG_CHECK_MINUTE,
-            timezone=BACKUP_TIMEZONE
-        ),
+        'interval',
+        minutes=FRAG_INTERVAL_MINUTES,
         id='frag_check',
         replace_existing=True
     )
@@ -579,8 +575,9 @@ def start_frag_scheduler():
     frag_is_running = True
     return jsonify({
         'success': True,
-        'message': f'Monitoreo de fragmentación iniciado. Verificación diaria a las {FRAG_CHECK_HOUR:02d}:{FRAG_CHECK_MINUTE:02d} ({BACKUP_TIMEZONE}). Umbral: {frag_umbral}%.',
+        'message': f'Monitoreo de fragmentación iniciado. Verificación cada {FRAG_INTERVAL_MINUTES} minutos. Umbral: {frag_umbral}%.',
         'umbral': frag_umbral,
+        'interval_minutes': FRAG_INTERVAL_MINUTES,
         'next_run': str(scheduler.get_job('frag_check').next_run_time) if scheduler.get_job('frag_check') else None
     })
 
@@ -609,8 +606,7 @@ def frag_status():
         'umbral': frag_umbral,
         'last_check': frag_last_check,
         'last_result': frag_last_result,
-        'check_time': f'{FRAG_CHECK_HOUR:02d}:{FRAG_CHECK_MINUTE:02d}',
-        'timezone': BACKUP_TIMEZONE,
+        'interval_minutes': FRAG_INTERVAL_MINUTES,
         'next_run': next_run
     })
 

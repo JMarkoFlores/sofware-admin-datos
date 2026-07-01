@@ -699,9 +699,7 @@ function Disparador() {
               <label>Próxima verif.:</label>
               <span className="value">
                 {fragRunning
-                  ? fragStatus.next_run
-                    ? `${fragStatus.check_time} (${fragStatus.timezone})`
-                    : "Calculando..."
+                  ? `Cada ${fragStatus.interval_minutes || 60} min`
                   : "--"}
               </span>
             </div>
@@ -809,13 +807,13 @@ function Disparador() {
         </div>
         <div className="card-body">
           <p className="description">
-            El sistema verifica diariamente a las <strong>8:00 AM</strong> el
+            El sistema verifica cada <strong>1 hora</strong> el
             nivel de fragmentación de los índices en <strong>Bibliouni</strong>.
             Si algún índice supera el umbral configurado, envía una alerta por
             WhatsApp con el detalle y el comando sugerido.
           </p>
           <ul className="feature-list">
-            <li>Verificación diaria automática a las 8:00 AM</li>
+            <li>Verificación automática cada 1 hora</li>
             <li>Alerta por WhatsApp si hay fragmentación alta</li>
             <li>Muestra qué tablas e índices están afectados</li>
             <li>Responda "FACTOR LLENADO 80" para optimizar</li>
