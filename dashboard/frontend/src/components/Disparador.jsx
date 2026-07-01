@@ -26,10 +26,20 @@ function Disparador() {
   const [fillFactorResult, setFillFactorResult] = useState(null);
   const [fillFactorError, setFillFactorError] = useState("");
 
+  // ===================== ESTADOS MONITOREO FRAGMENTACIÓN =====================
+  const [fragRunning, setFragRunning] = useState(false);
+  const [fragStatus, setFragStatus] = useState({});
+  const [fragLoading, setFragLoading] = useState(false);
+  const [fragUmbral, setFragUmbral] = useState(30);
+  const [fragError, setFragError] = useState("");
+  const [fragTestResult, setFragTestResult] = useState(null);
+  const [fragTestLoading, setFragTestLoading] = useState(false);
+
   // ===================== CARGA INICIAL =====================
   useEffect(() => {
     fetchStatus(true);
     fetchBackupStatus(true);
+    fetchFragStatus(true);
   }, []);
 
   // ===================== POLLING MENSAJE =====================
@@ -45,6 +55,13 @@ function Disparador() {
     const interval = setInterval(() => fetchBackupStatus(false), 5000);
     return () => clearInterval(interval);
   }, [backupRunning]);
+
+  // ===================== POLLING FRAGMENTACIÓN =====================
+  useEffect(() => {
+    if (!fragRunning) return;
+    const interval = setInterval(() => fetchFragStatus(false), 10000);
+    return () => clearInterval(interval);
+  }, [fragRunning]);
 
   // ===================== HELPERS =====================
   const validateInput = (number) => {
@@ -217,6 +234,76 @@ function Disparador() {
       setFillFactorError("Error al ejecutar: " + errorMsg);
     }
     setFillFactorLoading(false);
+  };
+
+  // ===================== FRAGMENTACIÓN - FETCH =====================
+  const fetchFragStatus = async (initial = false) => {
+    try {
+      const res = await axios.get("/api/fragmentacion/status");
+      setFragStatus(res.data);
+      setFragRunning(res.data.is_running);
+      if (initial && res.data.umbral) {
+        setFragUmbral(res.data.umbral);
+      }
+    } catch (e) {
+      console.log("Error fetching frag status:", e);
+    }
+  };
+
+  // ===================== FRAGMENTACIÓN - START / STOP =====================
+  const handleFragStart = async () => {
+    setFragError("");
+    const val = parseInt(fragUmbral, 10);
+    if (isNaN(val) || val < 1 || val > 100) {
+      setFragError("El umbral debe ser un número entre 1 y 100.");
+      return;
+    }
+    setFragLoading(true);
+    try {
+      const res = await axios.post("/api/fragmentacion/start", { umbral: val });
+      if (res.data.success) {
+        setFragRunning(true);
+        fetchFragStatus(false);
+      } else {
+        setFragError(res.data.message);
+      }
+    } catch (e) {
+      setFragError("Error al iniciar: " + (e.response?.data?.message || e.message));
+    }
+    setFragLoading(false);
+  };
+
+  const handleFragStop = async () => {
+    setFragLoading(true);
+    try {
+      const res = await axios.get("/api/fragmentacion/stop");
+      if (res.data.success) {
+        setFragRunning(false);
+        fetchFragStatus(true);
+      }
+    } catch (e) {
+      setFragError("Error al detener: " + e.message);
+    }
+    setFragLoading(false);
+  };
+
+  // ===================== FRAGMENTACIÓN - TEST MANUAL =====================
+  const handleFragTest = async () => {
+    setFragError("");
+    setFragTestResult(null);
+    const val = parseInt(fragUmbral, 10);
+    if (isNaN(val) || val < 1 || val > 100) {
+      setFragError("El umbral debe ser un número entre 1 y 100.");
+      return;
+    }
+    setFragTestLoading(true);
+    try {
+      const res = await axios.get(`/api/fragmentacion/test?umbral=${val}`);
+      setFragTestResult(res.data.result);
+    } catch (e) {
+      setFragError("Error al verificar: " + (e.response?.data?.message || e.message));
+    }
+    setFragTestLoading(false);
   };
 
   // ===================== RENDER =====================
@@ -563,6 +650,177 @@ function Disparador() {
               FACTOR LLENADO 80
             </code>
           </p>
+        </div>
+      </div>
+
+      {/* ========== MONITOREO DE FRAGMENTACIÓN ========== */}
+      <div className="card">
+        <div className="card-header">
+          <h2>Monitoreo de Fragmentación</h2>
+          <div className={`status-badge ${fragRunning ? "active" : "inactive"}`}>
+            {fragRunning ? "En ejecución" : "Detenido"}
+          </div>
+        </div>
+        <div className="card-body">
+          <p className="description">
+            Verifica diariamente el nivel de fragmentación de los índices de{" "}
+            <strong>Bibliouni</strong>. Si algún índice supera el umbral
+            configurado, envía una alerta por WhatsApp para que decidas si
+            ejecutar el factor de llenado.
+          </p>
+
+          <div className="info-grid">
+            <div className="info-item">
+              <label>Umbral de alerta (%):</label>
+              {fragRunning ? (
+                <span className="value">{fragUmbral}%</span>
+              ) : (
+                <>
+                  <input
+                    type="number"
+                    className={`phone-input ${fragError ? "error" : ""}`}
+                    value={fragUmbral}
+                    onChange={(e) => {
+                      setFragUmbral(e.target.value);
+                      setFragError("");
+                    }}
+                    min="1"
+                    max="100"
+                    placeholder="30"
+                    disabled={fragRunning}
+                  />
+                  <span className="input-hint">
+                    Si un índice supera este %, se envía alerta (recomendado: 30)
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="info-item">
+              <label>Próxima verif.:</label>
+              <span className="value">
+                {fragRunning
+                  ? fragStatus.next_run
+                    ? `${fragStatus.check_time} (${fragStatus.timezone})`
+                    : "Calculando..."
+                  : "--"}
+              </span>
+            </div>
+            <div className="info-item">
+              <label>Última verif.:</label>
+              <span className="value">
+                {fragStatus.last_check
+                  ? `${fragStatus.last_check} — ${
+                      fragStatus.last_result?.hay_alerta
+                        ? `⚠️ ${fragStatus.last_result.tablas_fragmentadas?.length || 0} índices fragmentados`
+                        : "✅ Todo OK"
+                    }`
+                  : "Nunca"}
+              </span>
+            </div>
+          </div>
+
+          {fragError && (
+            <div className="error-message">
+              <strong>Error:</strong> {fragError}
+            </div>
+          )}
+
+          <div className="action-area" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            {fragRunning ? (
+              <button
+                className="btn btn-danger"
+                onClick={handleFragStop}
+                disabled={fragLoading}
+              >
+                {fragLoading ? "Deteniendo..." : "Detener Monitoreo"}
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={handleFragStart}
+                disabled={fragLoading}
+              >
+                {fragLoading ? "Iniciando..." : "Iniciar Monitoreo"}
+              </button>
+            )}
+            <button
+              className="btn btn-primary"
+              onClick={handleFragTest}
+              disabled={fragTestLoading}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }}
+            >
+              {fragTestLoading ? "Verificando..." : "Verificar Ahora"}
+            </button>
+          </div>
+
+          {fragTestResult && (
+            <div
+              className="last-message"
+              style={{
+                marginTop: "15px",
+                borderLeft: `3px solid ${
+                  fragTestResult.hay_alerta ? "#f59e0b" : "#22c55e"
+                }`,
+                background: fragTestResult.hay_alerta
+                  ? "rgba(245,158,11,0.07)"
+                  : "rgba(34,197,94,0.07)",
+              }}
+            >
+              <label>
+                {fragTestResult.hay_alerta
+                  ? `⚠️ ${fragTestResult.tablas_fragmentadas.length} índices superan el ${fragTestResult.umbral}%`
+                  : `✅ Todos los índices por debajo del ${fragTestResult.umbral}%`}
+              </label>
+              <p>{fragTestResult.mensaje}</p>
+              {fragTestResult.tablas_fragmentadas?.length > 0 && (
+                <div style={{ marginTop: "8px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                        <th style={{ textAlign: "left", padding: "6px 8px" }}>Tabla</th>
+                        <th style={{ textAlign: "left", padding: "6px 8px" }}>Índice</th>
+                        <th style={{ textAlign: "right", padding: "6px 8px" }}>Fragmentación</th>
+                        <th style={{ textAlign: "right", padding: "6px 8px" }}>Páginas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fragTestResult.tablas_fragmentadas.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                          <td style={{ padding: "5px 8px" }}>{item.tabla}</td>
+                          <td style={{ padding: "5px 8px" }}>{item.indice}</td>
+                          <td style={{ padding: "5px 8px", textAlign: "right", color: item.fragmentacion >= 50 ? "#ef4444" : "#f59e0b" }}>
+                            {item.fragmentacion.toFixed(1)}%
+                          </td>
+                          <td style={{ padding: "5px 8px", textAlign: "right" }}>{item.paginas}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h3>¿Cómo funciona el monitoreo?</h3>
+        </div>
+        <div className="card-body">
+          <p className="description">
+            El sistema verifica diariamente a las <strong>8:00 AM</strong> el
+            nivel de fragmentación de los índices en <strong>Bibliouni</strong>.
+            Si algún índice supera el umbral configurado, envía una alerta por
+            WhatsApp con el detalle y el comando sugerido.
+          </p>
+          <ul className="feature-list">
+            <li>Verificación diaria automática a las 8:00 AM</li>
+            <li>Alerta por WhatsApp si hay fragmentación alta</li>
+            <li>Muestra qué tablas e índices están afectados</li>
+            <li>Responda "FACTOR LLENADO 80" para optimizar</li>
+            <li>Botón "Verificar Ahora" para comprobar al instante</li>
+          </ul>
         </div>
       </div>
     </div>

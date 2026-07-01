@@ -19,6 +19,7 @@ Ejemplo de uso desde WhatsApp:
 """
 
 import pyodbc
+from datetime import datetime
 from config.settings import Config
 from utils.helpers import log_auditoria
 from whatsapp import send_message
@@ -330,3 +331,145 @@ def procesar_comando_fill_factor(texto, numero_remoto, numero_destino_configurad
             'fill_factor': fill_factor,
             'mensaje': resultado['mensaje']
         }
+
+
+# ---------------------------------------------------------------------------
+# Monitoreo de fragmentación de índices
+# ---------------------------------------------------------------------------
+
+def verificar_fragmentacion(umbral=30):
+    """
+    Verifica el nivel de fragmentación de los índices en Bibliouni.
+    Usa sys.dm_db_index_physical_stats para obtener el porcentaje de
+    fragmentación promedio de cada índice.
+
+    Args:
+        umbral (int): Porcentaje mínimo de fragmentación para considerar
+                      que un índice necesita atención (default: 30%).
+
+    Returns:
+        dict: {
+            'hay_alerta': bool,
+            'umbral': int,
+            'tablas_fragmentadas': [
+                {'tabla': str, 'indice': str, 'fragmentacion': float, 'paginas': int}
+            ],
+            'total_indices': int,
+            'mensaje': str,
+            'fecha': str
+        }
+    """
+    conn_str = _get_connection_string()
+    fecha = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    try:
+        with pyodbc.connect(conn_str, timeout=30) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT
+                    t.name AS tabla,
+                    i.name AS indice,
+                    ROUND(ps.avg_fragmentation_in_percent, 2) AS fragmentacion,
+                    ps.page_count AS paginas
+                FROM sys.dm_db_index_physical_stats(
+                    DB_ID(), NULL, NULL, NULL, 'LIMITED'
+                ) ps
+                INNER JOIN sys.tables t ON ps.object_id = t.object_id
+                INNER JOIN sys.indexes i ON ps.object_id = i.object_id
+                    AND ps.index_id = i.index_id
+                WHERE ps.index_id > 0
+                  AND ps.page_count > 0
+                ORDER BY ps.avg_fragmentation_in_percent DESC
+            """)
+
+            todos = []
+            fragmentadas = []
+            for row in cursor.fetchall():
+                entrada = {
+                    'tabla': row[0],
+                    'indice': row[1] or '(sin nombre)',
+                    'fragmentacion': float(row[2]),
+                    'paginas': int(row[3])
+                }
+                todos.append(entrada)
+                if entrada['fragmentacion'] >= umbral:
+                    fragmentadas.append(entrada)
+
+            total = len(todos)
+            hay_alerta = len(fragmentadas) > 0
+
+            if hay_alerta:
+                mensaje = (
+                    f"Se encontraron {len(fragmentadas)} índices con fragmentación "
+                    f">= {umbral}% en {Config.BIBLIOUNI_DB}."
+                )
+            else:
+                mensaje = (
+                    f"Todos los índices de {Config.BIBLIOUNI_DB} están por debajo "
+                    f"del umbral de {umbral}%. No se requiere acción."
+                )
+
+            print(f"[DEBUG Fragmentación] {mensaje}")
+            return {
+                'hay_alerta': hay_alerta,
+                'umbral': umbral,
+                'tablas_fragmentadas': fragmentadas,
+                'total_indices': total,
+                'mensaje': mensaje,
+                'fecha': fecha
+            }
+
+    except Exception as e:
+        print(f"[ERROR Fragmentación] {e}")
+        return {
+            'hay_alerta': False,
+            'umbral': umbral,
+            'tablas_fragmentadas': [],
+            'total_indices': 0,
+            'mensaje': f'Error al verificar fragmentación: {str(e)}',
+            'fecha': fecha
+        }
+
+
+def enviar_alerta_fragmentacion(numero_destino, resultado):
+    """
+    Envía alerta de fragmentación por WhatsApp con el detalle de
+    qué tablas/índices superan el umbral.
+    """
+    fragmentadas = resultado['tablas_fragmentadas']
+    umbral = resultado['umbral']
+
+    # Listar las tablas fragmentadas (máximo 10 para no hacer un mensaje enorme)
+    detalle_lineas = []
+    for item in fragmentadas[:10]:
+        detalle_lineas.append(
+            f"  - {item['tabla']}.{item['indice']}: "
+            f"{item['fragmentacion']:.1f}% ({item['paginas']} págs)"
+        )
+    if len(fragmentadas) > 10:
+        detalle_lineas.append(f"  ... y {len(fragmentadas) - 10} índices más.")
+
+    detalle = "\n".join(detalle_lineas)
+
+    mensaje = (
+        f"🚨 ALERTA DE FRAGMENTACIÓN\n\n"
+        f"Base de datos: {Config.BIBLIOUNI_DB}\n"
+        f"Umbral configurado: {umbral}%\n\n"
+        f"Se detectaron {len(fragmentadas)} índices fragmentados:\n\n"
+        f"{detalle}\n\n"
+        f"Para optimizar los índices, responda con:\n\n"
+        f"FACTOR LLENADO 80"
+    )
+    return send_message(mensaje, numero_destino)
+
+
+def enviar_ok_fragmentacion(numero_destino, resultado):
+    """Envía confirmación de que la fragmentación está dentro del umbral."""
+    mensaje = (
+        f"✅ FRAGMENTACIÓN OK\n\n"
+        f"Base de datos: {Config.BIBLIOUNI_DB}\n"
+        f"Umbral configurado: {resultado['umbral']}%\n\n"
+        f"Todos los índices ({resultado['total_indices']}) están por debajo "
+        f"del umbral. No se requiere acción."
+    )
+    return send_message(mensaje, numero_destino)
