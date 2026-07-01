@@ -67,9 +67,9 @@ function Disparador() {
   }
 
   useEffect(() => { 
-    fetchStatus(true); 
-    fetchBackupStatus(true);
-    fetchFragStatus(true);
+    fetchStatus(true) 
+    fetchBackupStatus(true)
+    fetchFragStatus(true)
   }, [])
 
   useEffect(() => {
@@ -287,158 +287,112 @@ function Disparador() {
         </div>
       </div>
 
-      <div className="m-table-card">
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <FiMessageSquare size={18} style={{ color: '#ef4444' }} />
-          <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Disparador de Mensajes</h3>
-          <span className={`m-badge ${isRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
-            {isRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
-            {isRunning ? ' En ejecución' : ' Detenido'}
-          </span>
+      {/* Fila 1: Info Envío - Disparador Mensajes */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiMessageSquare size={18} style={{ color: '#ef4444' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Información del Envío</h3>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <p style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '14px' }}>
+              Al iniciar, se enviará un mensaje de WhatsApp inmediatamente y luego cada 1 minuto con la cantidad de tablas y sus nombres de la base de datos <strong>Bibliouni</strong>.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '20px', color: '#64748b', fontSize: '13px' }}>
+              <li style={{ marginBottom: '4px' }}>Número de destino editable</li>
+              <li style={{ marginBottom: '4px' }}>Consulta automática de tablas</li>
+              <li style={{ marginBottom: '4px' }}>Envío por Evolution API</li>
+              <li>Intervalo de 1 minuto</li>
+            </ul>
+          </div>
         </div>
 
-        <div style={{ padding: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiPhone size={13} /> Número de Destino</label>
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiMessageSquare size={18} style={{ color: '#ef4444' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Disparador de Mensajes</h3>
+            <span className={`m-badge ${isRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
+              {isRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
+              {isRunning ? ' En ejecución' : ' Detenido'}
+            </span>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiPhone size={13} /> Número de Destino</label>
+                {isRunning ? (
+                  <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{phoneNumber}</span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={phoneNumber}
+                      onChange={handleInputChange}
+                      onBlur={handleInputBlur}
+                      onFocus={handleInputFocus}
+                      placeholder="519XXXXXXXX"
+                      style={{
+                        padding: '10px 14px',
+                        fontSize: '14px',
+                        borderRadius: '8px',
+                        border: error ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                        outline: 'none',
+                        transition: 'border-color 0.2s'
+                      }}
+                    />
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ej: 51952310138 (11 dígitos)</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiClock size={13} /> Último Envío</label>
+                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{status.last_sent || 'Nunca'}</span>
+              </div>
+            </div>
+
+            {error && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
+                <strong>Error:</strong> {error}
+              </div>
+            )}
+
+            <div className="m-form-actions" style={{ justifyContent: 'flex-start', marginBottom: '16px' }}>
               {isRunning ? (
-                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{phoneNumber}</span>
+                <button className="m-btn-danger" onClick={handleStop} disabled={loading}>
+                  {loading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
+                  {loading ? ' Deteniendo...' : ' Detener'}
+                </button>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={phoneNumber}
-                    onChange={handleInputChange}
-                    onBlur={handleInputBlur}
-                    onFocus={handleInputFocus}
-                    placeholder="519XXXXXXXX"
-                    style={{
-                      padding: '10px 14px',
-                      fontSize: '14px',
-                      borderRadius: '8px',
-                      border: error ? '1px solid #ef4444' : '1px solid #e2e8f0',
-                      outline: 'none',
-                      transition: 'border-color 0.2s'
-                    }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ej: 51952310138 (11 dígitos)</span>
-                </div>
+                <button className="m-btn-primary" onClick={handleStart} disabled={loading}>
+                  {loading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
+                  {loading ? ' Iniciando...' : ' Iniciar'}
+                </button>
               )}
             </div>
 
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiClock size={13} /> Último Envío</label>
-              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{status.last_sent || 'Nunca'}</span>
-            </div>
-          </div>
-
-          {error && (
-            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
-          <div className="m-form-actions" style={{ justifyContent: 'flex-start', marginBottom: '16px' }}>
-            {isRunning ? (
-              <button className="m-btn-danger" onClick={handleStop} disabled={loading}>
-                {loading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
-                {loading ? ' Deteniendo...' : ' Detener'}
-              </button>
-            ) : (
-              <button className="m-btn-primary" onClick={handleStart} disabled={loading}>
-                {loading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
-                {loading ? ' Iniciando...' : ' Iniciar'}
-              </button>
+            {status.last_message && (
+              <div style={{ padding: '12px 16px', background: '#f1f5f9', borderRadius: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}><FiMessageSquare size={10} /> Último Mensaje</label>
+                <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{status.last_message}</p>
+              </div>
             )}
           </div>
-
-          {status.last_message && (
-            <div style={{ padding: '12px 16px', background: '#f1f5f9', borderRadius: '8px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}><FiMessageSquare size={10} /> Último Mensaje</label>
-              <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{status.last_message}</p>
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="m-table-card" style={{ marginTop: '20px' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <FiDatabase size={18} style={{ color: '#3b82f6' }} />
-          <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Disparador de Backup</h3>
-          <span className={`m-badge ${backupRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
-            {backupRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
-            {backupRunning ? ' En ejecución' : ' Detenido'}
-          </span>
-        </div>
-
-        <div style={{ padding: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiPhone size={13} /> Número de Destino</label>
-              {backupRunning ? (
-                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{backupPhone}</span>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <input
-                    ref={backupInputRef}
-                    type="text"
-                    value={backupPhone}
-                    onChange={handleBackupInputChange}
-                    onBlur={handleBackupInputBlur}
-                    onFocus={handleBackupInputFocus}
-                    placeholder="519XXXXXXXX"
-                    style={{
-                      padding: '10px 14px',
-                      fontSize: '14px',
-                      borderRadius: '8px',
-                      border: backupError ? '1px solid #ef4444' : '1px solid #e2e8f0',
-                      outline: 'none',
-                      transition: 'border-color 0.2s'
-                    }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ej: 51952310138 (11 dígitos)</span>
-                </div>
-              )}
-            </div>
-
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiClock size={13} /> Próxima Verificación</label>
-              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
-                {backupRunning ? (backupStatus.check_time ? `${backupStatus.check_time} (${backupStatus.timezone})` : 'Calculando...') : '-'}
-              </span>
-            </div>
-
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiCheckCircle size={13} /> Última Verificación</label>
-              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
-                {backupStatus.last_check ? `${backupStatus.last_check} — ${backupStatus.last_result === 'exito' ? 'Éxito' : backupStatus.last_result === 'alerta' ? 'Alerta enviada' : 'Nunca'}` : 'Nunca'}
-              </span>
-            </div>
+      {/* Fila 2: Info Backup - Disparador Backup */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiDatabase size={18} style={{ color: '#3b82f6' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Información del Monitoreo</h3>
           </div>
-
-          {backupError && (
-            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
-              <strong>Error:</strong> {backupError}
-            </div>
-          )}
-
-          <div className="m-form-actions" style={{ justifyContent: 'flex-start', marginBottom: '16px' }}>
-            {backupRunning ? (
-              <button className="m-btn-danger" onClick={handleBackupStop} disabled={backupLoading}>
-                {backupLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
-                {backupLoading ? ' Deteniendo...' : ' Detener Monitoreo'}
-              </button>
-            ) : (
-              <button className="m-btn-primary" onClick={handleBackupStart} disabled={backupLoading}>
-                {backupLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
-                {backupLoading ? ' Iniciando...' : ' Iniciar Monitoreo'}
-              </button>
-            )}
-          </div>
-
-          <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
-            <p style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '14px' }}>El sistema verifica automáticamente a las <strong>7:00 AM (America/Lima)</strong> si existe un backup de la base de datos <strong>Bibliouni</strong> realizado durante el día.</p>
+          <div style={{ padding: '20px' }}>
+            <p style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '14px' }}>
+              El sistema verifica automáticamente a las <strong>7:00 AM (America/Lima)</strong> si existe un backup de la base de datos <strong>Bibliouni</strong> realizado durante el día.
+            </p>
             <ul style={{ margin: 0, paddingLeft: '20px', color: '#64748b', fontSize: '13px' }}>
               <li style={{ marginBottom: '4px' }}>Verificación diaria a las 7:00 AM</li>
               <li style={{ marginBottom: '4px' }}>Alerta por WhatsApp si falta backup</li>
@@ -447,239 +401,355 @@ function Disparador() {
             </ul>
           </div>
         </div>
-      </div>
 
-      <div className="m-table-card" style={{ marginTop: '20px' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <FiSettings size={18} style={{ color: '#8b5cf6' }} />
-          <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Factor de Llenado de Índices</h3>
-        </div>
-
-        <div style={{ padding: '20px' }}>
-          <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '14px' }}>
-            Reconstruye todos los índices de <strong>Bibliouni</strong> con el factor de llenado especificado. También puede ejecutarse enviando el comando por WhatsApp.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiSettings size={13} /> Factor de llenado (%)</label>
-              <input
-                type="number"
-                value={fillFactor}
-                onChange={(e) => {
-                  setFillFactor(e.target.value)
-                  setFillFactorError('')
-                  setFillFactorResult(null)
-                }}
-                min="1"
-                max="100"
-                placeholder="80"
-                disabled={fillFactorLoading}
-                style={{
-                  padding: '10px 14px',
-                  fontSize: '14px',
-                  borderRadius: '8px',
-                  border: fillFactorError ? '1px solid #ef4444' : '1px solid #e2e8f0',
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                  width: '100%'
-                }}
-              />
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>Número entre 1 y 100 (recomendado: 80)</span>
-            </div>
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiDatabase size={18} style={{ color: '#3b82f6' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Disparador de Backup</h3>
+            <span className={`m-badge ${backupRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
+              {backupRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
+              {backupRunning ? ' En ejecución' : ' Detenido'}
+            </span>
           </div>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiPhone size={13} /> Número de Destino</label>
+                {backupRunning ? (
+                  <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{backupPhone}</span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <input
+                      ref={backupInputRef}
+                      type="text"
+                      value={backupPhone}
+                      onChange={handleBackupInputChange}
+                      onBlur={handleBackupInputBlur}
+                      onFocus={handleBackupInputFocus}
+                      placeholder="519XXXXXXXX"
+                      style={{
+                        padding: '10px 14px',
+                        fontSize: '14px',
+                        borderRadius: '8px',
+                        border: backupError ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                        outline: 'none',
+                        transition: 'border-color 0.2s'
+                      }}
+                    />
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ej: 51952310138 (11 dígitos)</span>
+                  </div>
+                )}
+              </div>
 
-          {fillFactorError && (
-            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
-              <strong>Error:</strong> {fillFactorError}
-            </div>
-          )}
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiClock size={13} /> Próxima Verificación</label>
+                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
+                  {backupRunning ? (backupStatus.check_time ? `${backupStatus.check_time} (${backupStatus.timezone})` : 'Calculando...') : '-'}
+                </span>
+              </div>
 
-          {fillFactorResult && (
-            <div style={{
-              padding: '12px 16px',
-              borderLeft: `3px solid ${fillFactorResult.success ? '#22c55e' : '#ef4444'}`,
-              background: fillFactorResult.success ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)',
-              borderRadius: '8px',
-              marginBottom: '16px'
-            }}>
-              <label style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>
-                {fillFactorResult.success ? '✅ Rebuild completado' : '❌ Error en rebuild'}
-              </label>
-              <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{fillFactorResult.result?.mensaje || 'Operación finalizada.'}</p>
-              {fillFactorResult.result?.tablas_procesadas !== undefined && (
-                <p style={{ margin: '8px 0 0 0', color: '#475569', fontSize: '13px' }}>
-                  Tablas procesadas: <strong>{fillFactorResult.result.tablas_procesadas}</strong>
-                </p>
-              )}
-              {fillFactorResult.result?.tablas_con_error?.length > 0 && (
-                <p style={{ margin: '8px 0 0 0', color: '#f59e0b', fontSize: '13px' }}>
-                  ⚠️ Tablas con error: {fillFactorResult.result.tablas_con_error.map((e) => e.tabla).join(', ')}
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="m-form-actions" style={{ justifyContent: 'flex-start' }}>
-            <button className="m-btn-primary" onClick={handleFillFactor} disabled={fillFactorLoading}>
-              {fillFactorLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
-              {fillFactorLoading ? ' Ejecutando rebuild...' : ` Ejecutar con Fill Factor ${fillFactor}%`}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="m-table-card" style={{ marginTop: '20px' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <FiActivity size={18} style={{ color: '#10b981' }} />
-          <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Monitoreo de Fragmentación</h3>
-          <span className={`m-badge ${fragRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
-            {fragRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
-            {fragRunning ? ' En ejecución' : ' Detenido'}
-          </span>
-        </div>
-
-        <div style={{ padding: '20px' }}>
-          <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '14px' }}>
-            Verifica el nivel de fragmentación de los índices de <strong>Bibliouni</strong>. Si algún índice supera el umbral configurado, envía una alerta por WhatsApp.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiAlertCircle size={13} /> Umbral de alerta (%)</label>
-              {fragRunning ? (
-                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{fragUmbral}%</span>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <input
-                    type="number"
-                    value={fragUmbral}
-                    onChange={(e) => {
-                      setFragUmbral(e.target.value)
-                      setFragError('')
-                    }}
-                    min="1"
-                    max="100"
-                    placeholder="30"
-                    disabled={fragRunning}
-                    style={{
-                      padding: '10px 14px',
-                      fontSize: '14px',
-                      borderRadius: '8px',
-                      border: fragError ? '1px solid #ef4444' : '1px solid #e2e8f0',
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                      width: '100%'
-                    }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Si un índice supera este %, se envía alerta</span>
-                </div>
-              )}
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiCheckCircle size={13} /> Última Verificación</label>
+                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
+                  {backupStatus.last_check ? `${backupStatus.last_check} — ${backupStatus.last_result === 'exito' ? 'Éxito' : backupStatus.last_result === 'alerta' ? 'Alerta enviada' : 'Nunca'}` : 'Nunca'}
+                </span>
+              </div>
             </div>
 
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiClock size={13} /> Próxima Verificación</label>
-              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
-                {fragRunning ? `Cada ${fragStatus.interval_minutes || 60} min` : '-'}
-              </span>
-            </div>
-
-            <div className="m-form-group" style={{ margin: 0 }}>
-              <label><FiCheckCircle size={13} /> Última Verificación</label>
-              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
-                {fragStatus.last_check
-                  ? `${fragStatus.last_check} — ${fragStatus.last_result?.hay_alerta ? `⚠️ ${fragStatus.last_result.tablas_fragmentadas?.length || 0} índices fragmentados` : '✅ Todo OK'}`
-                  : 'Nunca'}
-              </span>
-            </div>
-          </div>
-
-          {fragError && (
-            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
-              <strong>Error:</strong> {fragError}
-            </div>
-          )}
-
-          <div className="m-form-actions" style={{ justifyContent: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
-            {fragRunning ? (
-              <button className="m-btn-danger" onClick={handleFragStop} disabled={fragLoading}>
-                {fragLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
-                {fragLoading ? ' Deteniendo...' : ' Detener Monitoreo'}
-              </button>
-            ) : (
-              <button className="m-btn-primary" onClick={handleFragStart} disabled={fragLoading}>
-                {fragLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
-                {fragLoading ? ' Iniciando...' : ' Iniciar Monitoreo'}
-              </button>
+            {backupError && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
+                <strong>Error:</strong> {backupError}
+              </div>
             )}
-            <button
-              onClick={handleFragTest}
-              disabled={fragTestLoading}
-              style={{
-                padding: '10px 18px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: 'white',
-                color: '#475569',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-            >
-              {fragTestLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiActivity size={14} />}
-              {fragTestLoading ? ' Verificando...' : ' Verificar Ahora'}
-            </button>
-          </div>
 
-          {fragTestResult && (
-            <div style={{
-              marginTop: '16px',
-              padding: '16px',
-              borderLeft: `3px solid ${fragTestResult.hay_alerta ? '#f59e0b' : '#22c55e'}`,
-              background: fragTestResult.hay_alerta ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.07)',
-              borderRadius: '8px'
-            }}>
-              <label style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
-                {fragTestResult.hay_alerta
-                  ? `⚠️ ${fragTestResult.tablas_fragmentadas.length} índices superan el ${fragTestResult.umbral}%`
-                  : `✅ Todos los índices por debajo del ${fragTestResult.umbral}%`}
-              </label>
-              <p style={{ margin: '0 0 12px 0', color: '#475569', fontSize: '14px' }}>{fragTestResult.mensaje}</p>
-
-              {fragTestResult.tablas_fragmentadas?.length > 0 && (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
-                    <thead style={{ background: '#f1f5f9' }}>
-                      <tr>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Tabla</th>
-                        <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Índice</th>
-                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Fragmentación</th>
-                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Páginas</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fragTestResult.tablas_fragmentadas.map((item, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '10px 12px', color: '#1e293b' }}>{item.tabla}</td>
-                          <td style={{ padding: '10px 12px', color: '#1e293b' }}>{item.indice}</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', color: item.fragmentacion >= 50 ? '#ef4444' : '#f59e0b', fontWeight: '500' }}>
-                            {item.fragmentacion.toFixed(1)}%
-                          </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', color: '#475569' }}>{item.paginas}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            <div className="m-form-actions" style={{ justifyContent: 'flex-start', marginBottom: '16px' }}>
+              {backupRunning ? (
+                <button className="m-btn-danger" onClick={handleBackupStop} disabled={backupLoading}>
+                  {backupLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
+                  {backupLoading ? ' Deteniendo...' : ' Detener Monitoreo'}
+                </button>
+              ) : (
+                <button className="m-btn-primary" onClick={handleBackupStart} disabled={backupLoading}>
+                  {backupLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
+                  {backupLoading ? ' Iniciando...' : ' Iniciar Monitoreo'}
+                </button>
               )}
             </div>
-          )}
+          </div>
+        </div>
+      </div>
+
+      {/* Fila 3: Info Factor Llenado - Factor Llenado */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiSettings size={18} style={{ color: '#8b5cf6' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>¿Qué es el Factor de Llenado?</h3>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <p style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '14px' }}>
+              El <strong>factor de llenado</strong> define qué porcentaje de cada página de índice se llena con datos al reconstruir. Dejar espacio libre reduce los <em>page splits</em> y mejora el rendimiento en tablas con muchas escrituras.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '20px', color: '#64748b', fontSize: '13px' }}>
+              <li style={{ marginBottom: '4px' }}><strong>100%</strong> — Para tablas de solo lectura (máximo rendimiento de lectura)</li>
+              <li style={{ marginBottom: '4px' }}><strong>80-90%</strong> — Recomendado para tablas con operaciones mixtas (lectura + escritura)</li>
+              <li style={{ marginBottom: '4px' }}><strong>60-70%</strong> — Para tablas con muchas inserciones aleatorias</li>
+            </ul>
+            <p style={{ margin: '12px 0 0 0', color: '#475569', fontSize: '14px' }}>
+              También puede ejecutarse enviando por WhatsApp: <br />
+              <code style={{ background: 'rgba(139,92,246,0.07)', padding: '4px 10px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.95em', color: '#8b5cf6' }}>FACTOR LLENADO 80</code>
+            </p>
+          </div>
+        </div>
+
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiSettings size={18} style={{ color: '#8b5cf6' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Factor de Llenado de Índices</h3>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '14px' }}>
+              Reconstruye todos los índices de <strong>Bibliouni</strong> con el factor de llenado especificado.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiSettings size={13} /> Factor de llenado (%)</label>
+                <input
+                  type="number"
+                  value={fillFactor}
+                  onChange={(e) => {
+                    setFillFactor(e.target.value)
+                    setFillFactorError('')
+                    setFillFactorResult(null)
+                  }}
+                  min="1"
+                  max="100"
+                  placeholder="80"
+                  disabled={fillFactorLoading}
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: '14px',
+                    borderRadius: '8px',
+                    border: fillFactorError ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                    width: '100%'
+                  }}
+                />
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Número entre 1 y 100 (recomendado: 80)</span>
+              </div>
+            </div>
+
+            {fillFactorError && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
+                <strong>Error:</strong> {fillFactorError}
+              </div>
+            )}
+
+            {fillFactorResult && (
+              <div style={{
+                padding: '12px 16px',
+                borderLeft: `3px solid ${fillFactorResult.success ? '#22c55e' : '#ef4444'}`,
+                background: fillFactorResult.success ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>
+                  {fillFactorResult.success ? '✅ Rebuild completado' : '❌ Error en rebuild'}
+                </label>
+                <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{fillFactorResult.result?.mensaje || 'Operación finalizada.'}</p>
+                {fillFactorResult.result?.tablas_procesadas !== undefined && (
+                  <p style={{ margin: '8px 0 0 0', color: '#475569', fontSize: '13px' }}>
+                    Tablas procesadas: <strong>{fillFactorResult.result.tablas_procesadas}</strong>
+                  </p>
+                )}
+                {fillFactorResult.result?.tablas_con_error?.length > 0 && (
+                  <p style={{ margin: '8px 0 0 0', color: '#f59e0b', fontSize: '13px' }}>
+                    ⚠️ Tablas con error: {fillFactorResult.result.tablas_con_error.map((e) => e.tabla).join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="m-form-actions" style={{ justifyContent: 'flex-start' }}>
+              <button className="m-btn-primary" onClick={handleFillFactor} disabled={fillFactorLoading}>
+                {fillFactorLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
+                {fillFactorLoading ? ' Ejecutando rebuild...' : ` Ejecutar con Fill Factor ${fillFactor}%`}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fila 4: Info Fragmentación - Monitoreo Fragmentación */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiActivity size={18} style={{ color: '#10b981' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>¿Cómo funciona el Monitoreo?</h3>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <p style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '14px' }}>
+              El sistema verifica cada <strong>1 hora</strong> el nivel de fragmentación de los índices en <strong>Bibliouni</strong>. Si algún índice supera el umbral configurado, envía una alerta por WhatsApp con el detalle y el comando sugerido.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '20px', color: '#64748b', fontSize: '13px' }}>
+              <li style={{ marginBottom: '4px' }}>Verificación automática cada 1 hora</li>
+              <li style={{ marginBottom: '4px' }}>Alerta por WhatsApp si hay fragmentación alta</li>
+              <li style={{ marginBottom: '4px' }}>Muestra qué tablas e índices están afectados</li>
+              <li style={{ marginBottom: '4px' }}>Responde "FACTOR LLENADO 80" para optimizar</li>
+              <li>Botón "Verificar Ahora" para comprobar al instante</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="m-table-card">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FiActivity size={18} style={{ color: '#10b981' }} />
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Monitoreo de Fragmentación</h3>
+            <span className={`m-badge ${fragRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
+              {fragRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
+              {fragRunning ? ' En ejecución' : ' Detenido'}
+            </span>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiAlertCircle size={13} /> Umbral de alerta (%)</label>
+                {fragRunning ? (
+                  <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{fragUmbral}%</span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <input
+                      type="number"
+                      value={fragUmbral}
+                      onChange={(e) => {
+                        setFragUmbral(e.target.value)
+                        setFragError('')
+                      }}
+                      min="1"
+                      max="100"
+                      placeholder="30"
+                      disabled={fragRunning}
+                      style={{
+                        padding: '10px 14px',
+                        fontSize: '14px',
+                        borderRadius: '8px',
+                        border: fragError ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        width: '100%'
+                      }}
+                    />
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Si un índice supera este %, se envía alerta</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiClock size={13} /> Próxima Verificación</label>
+                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
+                  {fragRunning ? `Cada ${fragStatus.interval_minutes || 60} min` : '-'}
+                </span>
+              </div>
+
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label><FiCheckCircle size={13} /> Última Verificación</label>
+                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
+                  {fragStatus.last_check
+                    ? `${fragStatus.last_check} — ${fragStatus.last_result?.hay_alerta ? `⚠️ ${fragStatus.last_result.tablas_fragmentadas?.length || 0} índices fragmentados` : '✅ Todo OK'}`
+                    : 'Nunca'}
+                </span>
+              </div>
+            </div>
+
+            {fragError && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
+                <strong>Error:</strong> {fragError}
+              </div>
+            )}
+
+            <div className="m-form-actions" style={{ justifyContent: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+              {fragRunning ? (
+                <button className="m-btn-danger" onClick={handleFragStop} disabled={fragLoading}>
+                  {fragLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
+                  {fragLoading ? ' Deteniendo...' : ' Detener Monitoreo'}
+                </button>
+              ) : (
+                <button className="m-btn-primary" onClick={handleFragStart} disabled={fragLoading}>
+                  {fragLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
+                  {fragLoading ? ' Iniciando...' : ' Iniciar Monitoreo'}
+                </button>
+              )}
+              <button
+                onClick={handleFragTest}
+                disabled={fragTestLoading}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: 'white',
+                  color: '#475569',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+              >
+                {fragTestLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiActivity size={14} />}
+                {fragTestLoading ? ' Verificando...' : ' Verificar Ahora'}
+              </button>
+            </div>
+
+            {fragTestResult && (
+              <div style={{
+                marginTop: '16px',
+                padding: '16px',
+                borderLeft: `3px solid ${fragTestResult.hay_alerta ? '#f59e0b' : '#22c55e'}`,
+                background: fragTestResult.hay_alerta ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.07)',
+                borderRadius: '8px'
+              }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
+                  {fragTestResult.hay_alerta
+                    ? `⚠️ ${fragTestResult.tablas_fragmentadas.length} índices superan el ${fragTestResult.umbral}%`
+                    : `✅ Todos los índices por debajo del ${fragTestResult.umbral}%`}
+                </label>
+                <p style={{ margin: '0 0 12px 0', color: '#475569', fontSize: '14px' }}>{fragTestResult.mensaje}</p>
+
+                {fragTestResult.tablas_fragmentadas?.length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+                      <thead style={{ background: '#f1f5f9' }}>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Tabla</th>
+                          <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Índice</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Fragmentación</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Páginas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fragTestResult.tablas_fragmentadas.map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '10px 12px', color: '#1e293b' }}>{item.tabla}</td>
+                            <td style={{ padding: '10px 12px', color: '#1e293b' }}>{item.indice}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: item.fragmentacion >= 50 ? '#ef4444' : '#f59e0b', fontWeight: '500' }}>
+                              {item.fragmentacion.toFixed(1)}%
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: '#475569' }}>{item.paginas}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
