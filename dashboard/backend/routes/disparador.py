@@ -22,6 +22,12 @@ from services.backup_service import (
     enviar_alerta_backup_pendiente,
     procesar_comando_backup,
 )
+from services.fill_factor_service import (
+    procesar_comando_fill_factor,
+    verificar_fragmentacion,
+    enviar_alerta_fragmentacion,
+    enviar_ok_fragmentacion,
+)
 from config.settings import Config
 
 bp = Blueprint('disparador', __name__)
@@ -53,6 +59,15 @@ WEBHOOK_URL = os.getenv(
     'http://host.docker.internal:5000/api/backup/webhook'
 )
 _flask_app = None  # Referencia a la app Flask para app_context en jobs
+
+# ---------------------------------------------------------------------------
+# Estado global del monitoreo de FRAGMENTACIÓN
+# ---------------------------------------------------------------------------
+frag_is_running = False
+frag_last_check = None
+frag_last_result = None
+frag_umbral = int(os.getenv('FRAG_UMBRAL', '30'))
+FRAG_INTERVAL_MINUTES = int(os.getenv('FRAG_INTERVAL_MINUTES', '60'))
 
 
 def set_flask_app(app):
@@ -392,7 +407,9 @@ def test_backup_check():
 def backup_webhook():
     """
     Recibe mensajes entrantes de Evolution API.
-    Procesa el comando RESUELVE BACKUP.
+    Procesa los siguientes comandos:
+    - RESUELVE BACKUP: ejecuta un backup manual de Bibliouni.
+    - FACTOR LLENADO <N>: reconstruye índices con el fill factor indicado.
     """
     payload = request.get_json() or {}
 
@@ -414,13 +431,215 @@ def backup_webhook():
 
     print(f"[{datetime.now()}] Webhook recibido de {numero_remoto}: {text}")
 
+    texto_upper = text.strip().upper()
+
     # Ejecutar procesamiento dentro de app_context para que
     # log_auditoria y db.session funcionen correctamente
-    if _flask_app:
-        with _flask_app.app_context():
-            resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+    if texto_upper.startswith('FACTOR LLENADO'):
+        # Comando de fill factor: FACTOR LLENADO <porcentaje>
+        if _flask_app:
+            with _flask_app.app_context():
+                resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+        else:
+            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+            resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
     else:
-        print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-        resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        # Comando de backup: RESUELVE BACKUP (u otros futuros)
+        if _flask_app:
+            with _flask_app.app_context():
+                resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        else:
+            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+            resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
 
     return jsonify(resultado), 200
+
+
+# ===========================================================================
+# FACTOR DE LLENADO - ENDPOINT DE PRUEBA
+# ===========================================================================
+
+@bp.route('/api/fill-factor/test', methods=['GET'])
+def test_fill_factor():
+    """
+    Endpoint de prueba: ejecuta el rebuild de índices con el fill factor
+    indicado como query parameter, sin necesidad de enviar WhatsApp.
+
+    Query params:
+        fill_factor (int): Porcentaje de llenado (1-100). Default: 80.
+    """
+    try:
+        fill_factor = int(request.args.get('fill_factor', 80))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'fill_factor debe ser un número entero'}), 400
+
+    if not (1 <= fill_factor <= 100):
+        return jsonify({'success': False, 'message': f'fill_factor debe estar entre 1 y 100, recibido: {fill_factor}'}), 400
+
+    print(f"[{datetime.now()}] TEST FILL FACTOR: ejecutando rebuild con FILLFACTOR={fill_factor}...")
+
+    if _flask_app:
+        with _flask_app.app_context():
+            resultado = procesar_comando_fill_factor(
+                f'FACTOR LLENADO {fill_factor}',
+                backup_destination,
+                backup_destination
+            )
+    else:
+        resultado = procesar_comando_fill_factor(
+            f'FACTOR LLENADO {fill_factor}',
+            backup_destination,
+            backup_destination
+        )
+
+    print(f"[{datetime.now()}] TEST FILL FACTOR Resultado: {resultado}")
+    return jsonify({
+        'success': resultado.get('exito', False),
+        'fill_factor': fill_factor,
+        'result': resultado
+    })
+
+
+# ===========================================================================
+# MONITOREO DE FRAGMENTACIÓN DE ÍNDICES
+# ===========================================================================
+
+def _check_fragmentation_impl():
+    """Implementación interna de la verificación de fragmentación."""
+    global frag_last_check, frag_last_result
+
+    print(f"[{datetime.now()}] Verificando fragmentación de índices en Bibliouni...")
+    frag_last_check = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    resultado = verificar_fragmentacion(frag_umbral)
+    frag_last_result = resultado
+
+    if resultado['hay_alerta']:
+        log_auditoria(
+            'ALERTA',
+            'Fragmentación',
+            resultado['mensaje'],
+            usuario='sistema',
+            resultado='Alerta'
+        )
+        print(f"[ALERTA] {resultado['mensaje']}")
+        enviar_alerta_fragmentacion(backup_destination, resultado)
+    else:
+        log_auditoria(
+            'VERIFICACIÓN',
+            'Fragmentación',
+            resultado['mensaje'],
+            usuario='sistema',
+            resultado='Éxito'
+        )
+        print(f"[OK] {resultado['mensaje']}")
+
+
+def check_fragmentation_daily():
+    """Función ejecutada por APScheduler dentro de Flask app_context."""
+    if _flask_app:
+        with _flask_app.app_context():
+            _check_fragmentation_impl()
+    else:
+        print("[ERROR] No se ha configurado la app Flask.")
+
+
+@bp.route('/api/fragmentacion/start', methods=['POST'])
+def start_frag_scheduler():
+    """Inicia el monitoreo de fragmentación (programado diariamente)."""
+    global frag_is_running, frag_umbral
+
+    if frag_is_running:
+        return jsonify({'success': False, 'message': 'El monitoreo de fragmentación ya está activo'})
+
+    data = request.get_json() or {}
+    umbral = data.get('umbral')
+    if umbral is not None:
+        try:
+            umbral = int(umbral)
+            if 1 <= umbral <= 100:
+                frag_umbral = umbral
+            else:
+                return jsonify({'success': False, 'message': 'El umbral debe estar entre 1 y 100'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'El umbral debe ser un número entero'}), 400
+
+    scheduler.add_job(
+        check_fragmentation_daily,
+        'interval',
+        minutes=FRAG_INTERVAL_MINUTES,
+        id='frag_check',
+        replace_existing=True
+    )
+
+    frag_is_running = True
+    return jsonify({
+        'success': True,
+        'message': f'Monitoreo de fragmentación iniciado. Verificación cada {FRAG_INTERVAL_MINUTES} minutos. Umbral: {frag_umbral}%.',
+        'umbral': frag_umbral,
+        'interval_minutes': FRAG_INTERVAL_MINUTES,
+        'next_run': str(scheduler.get_job('frag_check').next_run_time) if scheduler.get_job('frag_check') else None
+    })
+
+
+@bp.route('/api/fragmentacion/stop', methods=['GET'])
+def stop_frag_scheduler():
+    """Detiene el monitoreo de fragmentación."""
+    global frag_is_running
+    if not frag_is_running:
+        return jsonify({'success': False, 'message': 'El monitoreo de fragmentación no está activo'})
+    try:
+        scheduler.remove_job('frag_check')
+    except Exception:
+        pass
+    frag_is_running = False
+    return jsonify({'success': True, 'message': 'Monitoreo de fragmentación detenido'})
+
+
+@bp.route('/api/fragmentacion/status', methods=['GET'])
+def frag_status():
+    """Devuelve el estado actual del monitoreo de fragmentación."""
+    job = scheduler.get_job('frag_check')
+    next_run = str(job.next_run_time) if job else None
+    return jsonify({
+        'is_running': frag_is_running,
+        'umbral': frag_umbral,
+        'last_check': frag_last_check,
+        'last_result': frag_last_result,
+        'interval_minutes': FRAG_INTERVAL_MINUTES,
+        'next_run': next_run
+    })
+
+
+@bp.route('/api/fragmentacion/test', methods=['GET'])
+def test_fragmentation():
+    """
+    Endpoint de prueba: ejecuta la verificación de fragmentación manualmente.
+
+    Query params:
+        umbral (int): Porcentaje mínimo de fragmentación (default: valor configurado).
+    """
+    try:
+        umbral = int(request.args.get('umbral', frag_umbral))
+    except (ValueError, TypeError):
+        umbral = frag_umbral
+
+    print(f"[{datetime.now()}] TEST FRAGMENTACIÓN: verificando con umbral={umbral}%...")
+
+    if _flask_app:
+        with _flask_app.app_context():
+            resultado = verificar_fragmentacion(umbral)
+            log_auditoria(
+                'VERIFICACIÓN',
+                'Fragmentación',
+                resultado['mensaje'],
+                usuario='sistema',
+                resultado='Alerta' if resultado['hay_alerta'] else 'Éxito'
+            )
+    else:
+        resultado = verificar_fragmentacion(umbral)
+
+    return jsonify({
+        'success': True,
+        'result': resultado
+    })

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { FiMessageSquare, FiDatabase, FiPlay, FiSquare, FiRefreshCw, FiClock, FiCheckCircle, FiAlertCircle, FiPhone } from 'react-icons/fi'
+import { 
+  FiMessageSquare, FiDatabase, FiPlay, FiSquare, FiRefreshCw, FiClock, 
+  FiCheckCircle, FiAlertCircle, FiPhone, FiSettings, FiActivity 
+} from 'react-icons/fi'
 
 function Disparador() {
   const [isRunning, setIsRunning] = useState(false)
   const [status, setStatus] = useState({})
   const [loading, setLoading] = useState(false)
-  const [phoneNumber, setPhoneNumber] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('51900685850')
   const [error, setError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const inputRef = useRef(null)
@@ -14,10 +17,23 @@ function Disparador() {
   const [backupRunning, setBackupRunning] = useState(false)
   const [backupStatus, setBackupStatus] = useState({})
   const [backupLoading, setBackupLoading] = useState(false)
-  const [backupPhone, setBackupPhone] = useState('')
+  const [backupPhone, setBackupPhone] = useState('51900685850')
   const [backupError, setBackupError] = useState('')
   const [isEditingBackup, setIsEditingBackup] = useState(false)
   const backupInputRef = useRef(null)
+
+  const [fillFactor, setFillFactor] = useState(80)
+  const [fillFactorLoading, setFillFactorLoading] = useState(false)
+  const [fillFactorResult, setFillFactorResult] = useState(null)
+  const [fillFactorError, setFillFactorError] = useState('')
+
+  const [fragRunning, setFragRunning] = useState(false)
+  const [fragStatus, setFragStatus] = useState({})
+  const [fragLoading, setFragLoading] = useState(false)
+  const [fragUmbral, setFragUmbral] = useState(30)
+  const [fragError, setFragError] = useState('')
+  const [fragTestResult, setFragTestResult] = useState(null)
+  const [fragTestLoading, setFragTestLoading] = useState(false)
 
   const fetchStatus = async (updatePhone = false) => {
     try {
@@ -37,7 +53,24 @@ function Disparador() {
     } catch (e) { console.log('Error fetching backup status:', e) }
   }
 
-  useEffect(() => { fetchStatus(true); fetchBackupStatus(true) }, [])
+  const fetchFragStatus = async (initial = false) => {
+    try {
+      const res = await axios.get('/api/fragmentacion/status')
+      setFragStatus(res.data)
+      setFragRunning(res.data.is_running)
+      if (initial && res.data.umbral) {
+        setFragUmbral(res.data.umbral)
+      }
+    } catch (e) {
+      console.log('Error fetching frag status:', e)
+    }
+  }
+
+  useEffect(() => { 
+    fetchStatus(true); 
+    fetchBackupStatus(true);
+    fetchFragStatus(true);
+  }, [])
 
   useEffect(() => {
     let interval
@@ -50,6 +83,12 @@ function Disparador() {
     if (backupRunning) interval = setInterval(() => fetchBackupStatus(false), 5000)
     return () => clearInterval(interval)
   }, [backupRunning])
+
+  useEffect(() => {
+    if (!fragRunning) return
+    const interval = setInterval(() => fetchFragStatus(false), 10000)
+    return () => clearInterval(interval)
+  }, [fragRunning])
 
   const validateInput = (number) => {
     const cleaned = number.replace(/\s/g, '').replace(/\+/g, '')
@@ -67,8 +106,10 @@ function Disparador() {
     setLoading(true)
     try {
       const res = await axios.post('/api/start', { number: phoneNumber.trim() })
-      if (res.data.success) setIsRunning(true)
-      else setError(res.data.message)
+      if (res.data.success) {
+        setIsRunning(true)
+        setStatus((prev) => ({ ...prev, destination: phoneNumber.trim() }))
+      } else setError(res.data.message)
     } catch (e) {
       setError('Error al iniciar: ' + (e.response?.data?.message || e.message))
     }
@@ -84,7 +125,13 @@ function Disparador() {
     setLoading(false)
   }
 
-  const handleInputChange = (e) => { setIsEditing(true); setPhoneNumber(e.target.value); setError(''); clearTimeout(window.editTimeout); window.editTimeout = setTimeout(() => setIsEditing(false), 2000) }
+  const handleInputChange = (e) => { 
+    setIsEditing(true); 
+    setPhoneNumber(e.target.value); 
+    setError(''); 
+    clearTimeout(window.editTimeout); 
+    window.editTimeout = setTimeout(() => setIsEditing(false), 2000) 
+  }
   const handleInputBlur = () => setIsEditing(false)
   const handleInputFocus = () => setIsEditing(true)
 
@@ -95,8 +142,13 @@ function Disparador() {
     setBackupLoading(true)
     try {
       const res = await axios.post('/api/backup/start', { number: backupPhone.trim() })
-      if (res.data.success) setBackupRunning(true)
-      else setBackupError(res.data.message)
+      if (res.data.success) {
+        setBackupRunning(true)
+        setBackupStatus((prev) => ({
+          ...prev,
+          destination: backupPhone.trim(),
+        }))
+      } else setBackupError(res.data.message)
     } catch (e) {
       setBackupError('Error al iniciar: ' + (e.response?.data?.message || e.message))
     }
@@ -112,9 +164,90 @@ function Disparador() {
     setBackupLoading(false)
   }
 
-  const handleBackupInputChange = (e) => { setIsEditingBackup(true); setBackupPhone(e.target.value); setBackupError(''); clearTimeout(window.backupEditTimeout); window.backupEditTimeout = setTimeout(() => setIsEditingBackup(false), 2000) }
+  const handleBackupInputChange = (e) => { 
+    setIsEditingBackup(true); 
+    setBackupPhone(e.target.value); 
+    setBackupError(''); 
+    clearTimeout(window.backupEditTimeout); 
+    window.backupEditTimeout = setTimeout(() => setIsEditingBackup(false), 2000) 
+  }
   const handleBackupInputBlur = () => setIsEditingBackup(false)
   const handleBackupInputFocus = () => setIsEditingBackup(true)
+
+  const handleFillFactor = async () => {
+    setFillFactorError('')
+    setFillFactorResult(null)
+
+    const val = parseInt(fillFactor, 10)
+    if (isNaN(val) || val < 1 || val > 100) {
+      setFillFactorError('El factor de llenado debe ser un número entre 1 y 100.')
+      return
+    }
+
+    setFillFactorLoading(true)
+    try {
+      const res = await axios.get(`/api/fill-factor/test?fill_factor=${val}`)
+      setFillFactorResult(res.data)
+    } catch (e) {
+      const errorMsg = e.response?.data?.message || e.message
+      setFillFactorError('Error al ejecutar: ' + errorMsg)
+    }
+    setFillFactorLoading(false)
+  }
+
+  const handleFragStart = async () => {
+    setFragError('')
+    const val = parseInt(fragUmbral, 10)
+    if (isNaN(val) || val < 1 || val > 100) {
+      setFragError('El umbral debe ser un número entre 1 y 100.')
+      return
+    }
+    setFragLoading(true)
+    try {
+      const res = await axios.post('/api/fragmentacion/start', { umbral: val })
+      if (res.data.success) {
+        setFragRunning(true)
+        fetchFragStatus(false)
+      } else {
+        setFragError(res.data.message)
+      }
+    } catch (e) {
+      setFragError('Error al iniciar: ' + (e.response?.data?.message || e.message))
+    }
+    setFragLoading(false)
+  }
+
+  const handleFragStop = async () => {
+    setFragLoading(true)
+    try {
+      const res = await axios.get('/api/fragmentacion/stop')
+      if (res.data.success) {
+        setFragRunning(false)
+        fetchFragStatus(true)
+      }
+    } catch (e) {
+      setFragError('Error al detener: ' + e.message)
+    }
+    setFragLoading(false)
+  }
+
+  const handleFragTest = async () => {
+    setFragError('')
+    setFragTestResult(null)
+    const val = parseInt(fragUmbral, 10)
+    if (isNaN(val) || val < 1 || val > 100) {
+      setFragError('El umbral debe ser un número entre 1 y 100.')
+      return
+    }
+    setFragTestLoading(true)
+    try {
+      const res = await axios.get(`/api/fragmentacion/test?umbral=${val}`)
+      setFragTestResult(res.data.result)
+    } catch (e) {
+      setFragError('Error al verificar: ' + (e.response?.data?.message || e.message))
+    }
+    setFragTestLoading(false)
+  }
 
   return (
     <div className="m-page">
@@ -143,6 +276,13 @@ function Disparador() {
           <div>
             <div className="m-kpi-value">{backupRunning ? 'Activo' : 'Detenido'}</div>
             <div className="m-kpi-label">Estado Backup</div>
+          </div>
+        </div>
+        <div className="m-kpi-card kpi-green">
+          <div className="m-kpi-icon"><FiActivity size={20} /></div>
+          <div>
+            <div className="m-kpi-value">{fragRunning ? 'Activo' : 'Detenido'}</div>
+            <div className="m-kpi-label">Fragmentación</div>
           </div>
         </div>
       </div>
@@ -272,7 +412,7 @@ function Disparador() {
             <div className="m-form-group" style={{ margin: 0 }}>
               <label><FiCheckCircle size={13} /> Última Verificación</label>
               <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
-                {backupStatus.last_check ? `${backupStatus.last_check} — ${backupStatus.last_result === 'Éxito' ? 'Éxito' : backupStatus.last_result === 'alerta' ? 'Alerta enviada' : 'Nunca'}` : 'Nunca'}
+                {backupStatus.last_check ? `${backupStatus.last_check} — ${backupStatus.last_result === 'exito' ? 'Éxito' : backupStatus.last_result === 'alerta' ? 'Alerta enviada' : 'Nunca'}` : 'Nunca'}
               </span>
             </div>
           </div>
@@ -306,6 +446,240 @@ function Disparador() {
               <li>Webhook configurado automáticamente</li>
             </ul>
           </div>
+        </div>
+      </div>
+
+      <div className="m-table-card" style={{ marginTop: '20px' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <FiSettings size={18} style={{ color: '#8b5cf6' }} />
+          <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Factor de Llenado de Índices</h3>
+        </div>
+
+        <div style={{ padding: '20px' }}>
+          <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '14px' }}>
+            Reconstruye todos los índices de <strong>Bibliouni</strong> con el factor de llenado especificado. También puede ejecutarse enviando el comando por WhatsApp.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            <div className="m-form-group" style={{ margin: 0 }}>
+              <label><FiSettings size={13} /> Factor de llenado (%)</label>
+              <input
+                type="number"
+                value={fillFactor}
+                onChange={(e) => {
+                  setFillFactor(e.target.value)
+                  setFillFactorError('')
+                  setFillFactorResult(null)
+                }}
+                min="1"
+                max="100"
+                placeholder="80"
+                disabled={fillFactorLoading}
+                style={{
+                  padding: '10px 14px',
+                  fontSize: '14px',
+                  borderRadius: '8px',
+                  border: fillFactorError ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  width: '100%'
+                }}
+              />
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>Número entre 1 y 100 (recomendado: 80)</span>
+            </div>
+          </div>
+
+          {fillFactorError && (
+            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
+              <strong>Error:</strong> {fillFactorError}
+            </div>
+          )}
+
+          {fillFactorResult && (
+            <div style={{
+              padding: '12px 16px',
+              borderLeft: `3px solid ${fillFactorResult.success ? '#22c55e' : '#ef4444'}`,
+              background: fillFactorResult.success ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)',
+              borderRadius: '8px',
+              marginBottom: '16px'
+            }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>
+                {fillFactorResult.success ? '✅ Rebuild completado' : '❌ Error en rebuild'}
+              </label>
+              <p style={{ margin: 0, color: '#1e293b', fontSize: '14px' }}>{fillFactorResult.result?.mensaje || 'Operación finalizada.'}</p>
+              {fillFactorResult.result?.tablas_procesadas !== undefined && (
+                <p style={{ margin: '8px 0 0 0', color: '#475569', fontSize: '13px' }}>
+                  Tablas procesadas: <strong>{fillFactorResult.result.tablas_procesadas}</strong>
+                </p>
+              )}
+              {fillFactorResult.result?.tablas_con_error?.length > 0 && (
+                <p style={{ margin: '8px 0 0 0', color: '#f59e0b', fontSize: '13px' }}>
+                  ⚠️ Tablas con error: {fillFactorResult.result.tablas_con_error.map((e) => e.tabla).join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="m-form-actions" style={{ justifyContent: 'flex-start' }}>
+            <button className="m-btn-primary" onClick={handleFillFactor} disabled={fillFactorLoading}>
+              {fillFactorLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
+              {fillFactorLoading ? ' Ejecutando rebuild...' : ` Ejecutar con Fill Factor ${fillFactor}%`}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="m-table-card" style={{ marginTop: '20px' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <FiActivity size={18} style={{ color: '#10b981' }} />
+          <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Monitoreo de Fragmentación</h3>
+          <span className={`m-badge ${fragRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
+            {fragRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
+            {fragRunning ? ' En ejecución' : ' Detenido'}
+          </span>
+        </div>
+
+        <div style={{ padding: '20px' }}>
+          <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '14px' }}>
+            Verifica el nivel de fragmentación de los índices de <strong>Bibliouni</strong>. Si algún índice supera el umbral configurado, envía una alerta por WhatsApp.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            <div className="m-form-group" style={{ margin: 0 }}>
+              <label><FiAlertCircle size={13} /> Umbral de alerta (%)</label>
+              {fragRunning ? (
+                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{fragUmbral}%</span>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <input
+                    type="number"
+                    value={fragUmbral}
+                    onChange={(e) => {
+                      setFragUmbral(e.target.value)
+                      setFragError('')
+                    }}
+                    min="1"
+                    max="100"
+                    placeholder="30"
+                    disabled={fragRunning}
+                    style={{
+                      padding: '10px 14px',
+                      fontSize: '14px',
+                      borderRadius: '8px',
+                      border: fragError ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      width: '100%'
+                    }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Si un índice supera este %, se envía alerta</span>
+                </div>
+              )}
+            </div>
+
+            <div className="m-form-group" style={{ margin: 0 }}>
+              <label><FiClock size={13} /> Próxima Verificación</label>
+              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
+                {fragRunning ? `Cada ${fragStatus.interval_minutes || 60} min` : '-'}
+              </span>
+            </div>
+
+            <div className="m-form-group" style={{ margin: 0 }}>
+              <label><FiCheckCircle size={13} /> Última Verificación</label>
+              <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
+                {fragStatus.last_check
+                  ? `${fragStatus.last_check} — ${fragStatus.last_result?.hay_alerta ? `⚠️ ${fragStatus.last_result.tablas_fragmentadas?.length || 0} índices fragmentados` : '✅ Todo OK'}`
+                  : 'Nunca'}
+              </span>
+            </div>
+          </div>
+
+          {fragError && (
+            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
+              <strong>Error:</strong> {fragError}
+            </div>
+          )}
+
+          <div className="m-form-actions" style={{ justifyContent: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+            {fragRunning ? (
+              <button className="m-btn-danger" onClick={handleFragStop} disabled={fragLoading}>
+                {fragLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
+                {fragLoading ? ' Deteniendo...' : ' Detener Monitoreo'}
+              </button>
+            ) : (
+              <button className="m-btn-primary" onClick={handleFragStart} disabled={fragLoading}>
+                {fragLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
+                {fragLoading ? ' Iniciando...' : ' Iniciar Monitoreo'}
+              </button>
+            )}
+            <button
+              onClick={handleFragTest}
+              disabled={fragTestLoading}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: 'white',
+                color: '#475569',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+            >
+              {fragTestLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiActivity size={14} />}
+              {fragTestLoading ? ' Verificando...' : ' Verificar Ahora'}
+            </button>
+          </div>
+
+          {fragTestResult && (
+            <div style={{
+              marginTop: '16px',
+              padding: '16px',
+              borderLeft: `3px solid ${fragTestResult.hay_alerta ? '#f59e0b' : '#22c55e'}`,
+              background: fragTestResult.hay_alerta ? 'rgba(245,158,11,0.07)' : 'rgba(34,197,94,0.07)',
+              borderRadius: '8px'
+            }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
+                {fragTestResult.hay_alerta
+                  ? `⚠️ ${fragTestResult.tablas_fragmentadas.length} índices superan el ${fragTestResult.umbral}%`
+                  : `✅ Todos los índices por debajo del ${fragTestResult.umbral}%`}
+              </label>
+              <p style={{ margin: '0 0 12px 0', color: '#475569', fontSize: '14px' }}>{fragTestResult.mensaje}</p>
+
+              {fragTestResult.tablas_fragmentadas?.length > 0 && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+                    <thead style={{ background: '#f1f5f9' }}>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Tabla</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Índice</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Fragmentación</th>
+                        <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '600', color: '#475569' }}>Páginas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fragTestResult.tablas_fragmentadas.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: '10px 12px', color: '#1e293b' }}>{item.tabla}</td>
+                          <td style={{ padding: '10px 12px', color: '#1e293b' }}>{item.indice}</td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', color: item.fragmentacion >= 50 ? '#ef4444' : '#f59e0b', fontWeight: '500' }}>
+                            {item.fragmentacion.toFixed(1)}%
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', color: '#475569' }}>{item.paginas}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
