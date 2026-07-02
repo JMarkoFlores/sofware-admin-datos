@@ -6,6 +6,8 @@ Extensiones incluidas:
 - Disparador de mensajes (INTACTO)
 - Monitoreo de backup diario a las 7:00 AM (America/Lima)
 - Webhook para recepción de comandos vía Evolution API
+- Reportes interactivos por WhatsApp con menús dinámicos
+- Reportes automáticos diarios y semanales
 """
 
 import os
@@ -15,12 +17,21 @@ from flask import Blueprint, jsonify, request
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from db_tenebrosa import get_tables_info
-from whatsapp import send_message, format_tables_message
+from whatsapp import send_document, send_message, format_tables_message
 from utils.helpers import log_auditoria
 from services.backup_service import (
     verificar_backup_hoy,
     enviar_alerta_backup_pendiente,
     procesar_comando_backup,
+)
+from models.user_conversation import UserConversation
+from services.interactive_reports_service import (
+    generar_menu_principal,
+    procesar_mensaje_usuario,
+    generar_y_enviar_reporte,
+    actualizar_estado_reporte_enviado,
+    obtener_estado_conversacion,
+    REPORT_TYPES,
 )
 from config.settings import Config
 
@@ -59,6 +70,97 @@ def set_flask_app(app):
     """Recibe la instancia de Flask para poder usar app_context en jobs."""
     global _flask_app
     _flask_app = app
+
+
+# ---------------------------------------------------------------------------
+# Estado global de REPORTES AUTOMÁTICOS (NUEVO)
+# =====================
+# ESTADO GLOBAL REPORTES AUTOMÁTICOS
+# =====================
+reports_is_running = False
+reports_last_daily = None
+reports_last_weekly = None
+reports_last_monthly = None
+reports_destination = os.getenv('WHATSAPP_DESTINATION', '51900685850')
+
+# Habilitación de reportes
+reports_daily_enabled = True
+reports_weekly_enabled = True
+reports_monthly_enabled = True
+
+# VALORES POR DEFECTO (pueden ser sobrescritos dinámicamente)
+REPORTS_DAILY_HOUR = int(os.getenv('REPORTS_DAILY_HOUR', '8'))
+REPORTS_DAILY_MINUTE = int(os.getenv('REPORTS_DAILY_MINUTE', '0'))
+REPORTS_WEEKLY_DAY = os.getenv('REPORTS_WEEKLY_DAY', 'MON')  # MON, TUE, WED, etc.
+REPORTS_WEEKLY_HOUR = int(os.getenv('REPORTS_WEEKLY_HOUR', '9'))
+REPORTS_WEEKLY_MINUTE = int(os.getenv('REPORTS_WEEKLY_MINUTE', '0'))
+REPORTS_MONTHLY_DAY = int(os.getenv('REPORTS_MONTHLY_DAY', '1'))
+REPORTS_MONTHLY_HOUR = int(os.getenv('REPORTS_MONTHLY_HOUR', '10'))
+REPORTS_MONTHLY_MINUTE = int(os.getenv('REPORTS_MONTHLY_MINUTE', '0'))
+REPORTS_TIMEZONE = os.getenv('REPORTS_TIMEZONE', 'America/Lima')
+REPORTS_DAILY_TYPES = os.getenv('REPORTS_DAILY_TYPES', 'estadisticas,multas').split(',')
+REPORTS_WEEKLY_TYPES = os.getenv('REPORTS_WEEKLY_TYPES', 'estadisticas,libros_prestados,devoluciones_pendientes').split(',')
+REPORTS_MONTHLY_TYPES = os.getenv('REPORTS_MONTHLY_TYPES', 'estadisticas,libros_prestados,multas').split(',')
+
+
+def send_menu_scheduled(periodo):
+    """Envía el menú interactivo en la hora programada (para daily/weekly/monthly)."""
+    print(f"[{datetime.now()}] Enviando menú {periodo} a {reports_destination}...")
+    
+    with _flask_app.app_context():
+        menu_message = generar_menu_principal()
+        send_result = send_message(menu_message, reports_destination)
+        if send_result.get('success'):
+            UserConversation.get_or_create(reports_destination).update_state('menu')
+            print(f"[OK] Menú {periodo} enviado a {reports_destination}")
+            log_auditoria(
+                'REPORTE_AUTOMÁTICO',
+                'WhatsApp',
+                f'Menú {periodo} enviado',
+                usuario='sistema',
+                resultado='Éxito',
+                detalle=f'Destino: {reports_destination}'
+            )
+        else:
+            print(f"[ERROR] Fallo al enviar menú {periodo}")
+            log_auditoria(
+                'REPORTE_AUTOMÁTICO',
+                'WhatsApp',
+                f'Fallo al enviar menú {periodo}',
+                usuario='sistema',
+                resultado='Fallo',
+                detalle=f'Error: {send_result.get("error", "Unknown")}'
+            )
+
+
+def execute_daily_report():
+    """Envía el menú interactivo diario en la hora programada."""
+    global reports_last_daily
+    if not _flask_app:
+        print(f"[ERROR] Flask app no disponible para reporte diario")
+        return
+    reports_last_daily = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    send_menu_scheduled("diario")
+
+
+def execute_weekly_report():
+    """Envía el menú interactivo semanal en la hora programada."""
+    global reports_last_weekly
+    if not _flask_app:
+        print(f"[ERROR] Flask app no disponible para reporte semanal")
+        return
+    reports_last_weekly = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    send_menu_scheduled("semanal")
+
+
+def execute_monthly_report():
+    """Envía el menú interactivo mensual en la hora programada."""
+    global reports_last_monthly
+    if not _flask_app:
+        print(f"[ERROR] Flask app no disponible para reporte mensual")
+        return
+    reports_last_monthly = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    send_menu_scheduled("mensual")
 
 
 def validate_phone(number):
@@ -137,16 +239,17 @@ def test_send():
 def start_scheduler():
     global is_running, current_destination
     if is_running:
-        return jsonify({'success': False, 'message': 'El disparo ya está activo'})
+        return jsonify({'success': False, 'message': 'El disparador ya está activo'})
     data = request.get_json() or {}
     phone_number = data.get('number', '').strip()
-    if phone_number:
-        is_valid, result = validate_phone(phone_number)
-        if not is_valid:
-            return jsonify({'success': False, 'message': result}), 400
-        current_destination = result
-        print(f"[{datetime.now()}] Número actualizado: {current_destination}")
-    execute_send()
+    if not phone_number:
+        return jsonify({'success': False, 'message': 'Debes proporcionar un número de teléfono'}), 400
+    is_valid, result = validate_phone(phone_number)
+    if not is_valid:
+        return jsonify({'success': False, 'message': result}), 400
+    current_destination = result
+    print(f"[{datetime.now()}] Número actualizado: {current_destination}")
+
     scheduler.add_job(
         execute_send,
         'interval',
@@ -157,7 +260,7 @@ def start_scheduler():
     is_running = True
     return jsonify({
         'success': True,
-        'message': f'Disparo iniciado. Enviando cada {INTERVAL_MINUTES} minuto.',
+        'message': f'Disparador iniciado para el número {current_destination}',
         'destination': current_destination
     })
 
@@ -280,7 +383,7 @@ def check_backup_daily():
 
 @bp.route('/api/backup/start', methods=['POST'])
 def start_backup_scheduler():
-    """Inicia el monitoreo de backup (configura webhook + programa cron 7:00 AM)."""
+    """Inicia el monitoreo de backup (requiere número explícito)."""
     global backup_is_running, backup_destination
 
     if backup_is_running:
@@ -288,12 +391,13 @@ def start_backup_scheduler():
 
     data = request.get_json() or {}
     phone_number = data.get('number', '').strip()
-    if phone_number:
-        is_valid, result = validate_phone(phone_number)
-        if not is_valid:
-            return jsonify({'success': False, 'message': result}), 400
-        backup_destination = result
-        print(f"[{datetime.now()}] Número de backup actualizado: {backup_destination}")
+    if not phone_number:
+        return jsonify({'success': False, 'message': 'Debes proporcionar un número de teléfono'}), 400
+    is_valid, result = validate_phone(phone_number)
+    if not is_valid:
+        return jsonify({'success': False, 'message': result}), 400
+    backup_destination = result
+    print(f"[{datetime.now()}] Número de backup actualizado: {backup_destination}")
 
     # Configurar webhook automáticamente en Evolution
     configure_evolution_webhook()
@@ -313,7 +417,7 @@ def start_backup_scheduler():
     backup_is_running = True
     return jsonify({
         'success': True,
-        'message': f'Monitoreo de backup iniciado. Verificación diaria a las {BACKUP_CHECK_HOUR:02d}:{BACKUP_CHECK_MINUTE:02d} ({BACKUP_TIMEZONE}).',
+        'message': f'Monitoreo de backup iniciado para el número {backup_destination}',
         'destination': backup_destination,
         'next_run': str(scheduler.get_job('backup_check').next_run_time) if scheduler.get_job('backup_check') else None
     })
@@ -388,6 +492,36 @@ def test_backup_check():
     })
 
 
+def _extract_text_from_webhook_message(message):
+    """Extrae texto de diferentes estructuras de mensaje de Evolution API."""
+    if not isinstance(message, dict):
+        return ''
+
+    # Texto directo en la conversación
+    if 'conversation' in message:
+        return message.get('conversation', '')
+
+    # Mensaje extendido con texto opcional
+    extended = message.get('extendedTextMessage') or {}
+    if isinstance(extended, dict):
+        text = extended.get('text', '') or extended.get('contextInfo', {}).get('quotedMessage', {}).get('conversation', '')
+        if text:
+            return text
+
+    # Selección de lista o botones con texto mostrado
+    if 'selectedDisplayText' in message:
+        return message.get('selectedDisplayText', '')
+    if 'selectedRowId' in message:
+        return message.get('selectedRowId', '')
+
+    # Fallback: buscar cualquier campo string dentro del mensaje
+    for key, value in message.items():
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return ''
+
+
 @bp.route('/api/backup/webhook', methods=['POST'])
 def backup_webhook():
     """
@@ -403,24 +537,448 @@ def backup_webhook():
 
     remote_jid = key.get('remoteJid', '')
     from_me = key.get('fromMe', True)
-    text = message.get('conversation', '')
+    text = _extract_text_from_webhook_message(message)
 
     # Limpiar número (quitar @s.whatsapp.net)
     numero_remoto = remote_jid.split('@')[0] if remote_jid else ''
 
-    # Ignorar mensajes propios o sin texto
-    if from_me or not text or not numero_remoto:
+    # Ignorar mensajes: propios, sin texto, de grupos (@g.us) o sin número
+    if from_me or not text or not numero_remoto or '@g.us' in remote_jid:
         return jsonify({'processed': False, 'reason': 'Ignored'}), 200
 
-    print(f"[{datetime.now()}] Webhook recibido de {numero_remoto}: {text}")
+    log_auditoria(
+        'WHATSAPP',
+        'WhatsApp',
+        'Mensaje recibido por webhook de WhatsApp',
+        usuario='sistema',
+        resultado='Éxito',
+        detalle=f'Número: {numero_remoto}; Texto: {text[:160]}'
+    )
 
     # Ejecutar procesamiento dentro de app_context para que
     # log_auditoria y db.session funcionen correctamente
     if _flask_app:
         with _flask_app.app_context():
-            resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+            # Primero intentar procesar como comando de backup
+            resultado_backup = procesar_comando_backup(text, numero_remoto, backup_destination)
+            
+            # Si no fue un comando de backup, procesar como reporte interactivo
+            if not resultado_backup.get('processed', False):
+                resultado_reporte = procesar_mensaje_reporte(text, numero_remoto)
+                resultado = resultado_reporte if resultado_reporte.get('processed') else resultado_backup
+            else:
+                resultado = resultado_backup
     else:
-        print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-        resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        resultado_backup = procesar_comando_backup(text, numero_remoto, backup_destination)
+        resultado = resultado_backup
 
     return jsonify(resultado), 200
+
+
+# ===========================================================================
+# REPORTES INTERACTIVOS POR WHATSAPP
+# ===========================================================================
+
+def procesar_mensaje_reporte(texto_usuario, numero_usuario):
+    """
+    Procesa un mensaje del usuario para reportes interactivos.
+    Gestiona el flujo de conversación y generación de reportes.
+    """
+    # Obtener la conversación
+    conv = UserConversation.get_or_create(numero_usuario)
+    
+    # Si la conversación está inactiva y el usuario no envía un comando inicial, ignorar
+    # Para iniciar una conversación, el usuario debe ser contactado primero por el sistema o enviar un comando explícito
+    # Por ahora, solo procesamos si la conversación no está idle (ya fue iniciada)
+    # o el mensaje es un comando explícito para iniciar
+    if conv.state == 'idle' and texto_usuario.strip().lower() not in ['menu', 'reportes', 'iniciar', 'start']:
+        return {'processed': False, 'reason': 'Conversación inactiva'}
+        
+    # Procesar el mensaje y obtener la respuesta del estado
+    resultado_estado = procesar_mensaje_usuario(numero_usuario, texto_usuario)
+    
+    # Enviar respuesta inicial/menú
+    if resultado_estado['respuesta']:
+        send_result = send_message(resultado_estado['respuesta'], numero_usuario)
+        if not send_result['success']:
+            print(f"[ERROR] Fallo al enviar respuesta de reporte: {send_result}")
+    
+    # Si el usuario seleccionó un reporte, generarlo y enviarlo
+    if resultado_estado['estado'] == 'generating_report' and resultado_estado['tipo_reporte']:
+        tipo_reporte = resultado_estado['tipo_reporte']
+        print(f"[DEBUG] Generando reporte: {tipo_reporte} para {numero_usuario}")
+        
+        resultado_reporte = generar_y_enviar_reporte(numero_usuario, tipo_reporte)
+        
+        if resultado_reporte['exito']:
+            if resultado_reporte.get('pdf_path'):
+                send_result = send_document(
+                    resultado_reporte['pdf_path'],
+                    numero_usuario,
+                    resultado_reporte.get('mensaje', 'Reporte generado')
+                )
+                # Eliminar el PDF después de enviar
+                try:
+                    import os
+                    if os.path.exists(resultado_reporte['pdf_path']):
+                        os.remove(resultado_reporte['pdf_path'])
+                        print(f"[OK] PDF eliminado: {resultado_reporte['pdf_path']}")
+                except Exception as e:
+                    print(f"[ERROR] No se pudo eliminar el PDF: {e}")
+            else:
+                send_result = send_message(resultado_reporte['mensaje'], numero_usuario)
+            
+            if send_result['success']:
+                print(f"[OK] Reporte {tipo_reporte} enviado a {numero_usuario}")
+                actualizar_estado_reporte_enviado(numero_usuario)
+                from services.interactive_reports_service import generar_menu_continuar
+                menu_continuar = generar_menu_continuar()
+                send_message(menu_continuar, numero_usuario)
+            else:
+                print(f"[ERROR] Fallo al enviar reporte: {send_result}")
+                send_message(f"❌ No se pudo enviar el reporte. Error: {send_result.get('error', send_result.get('status_code'))}", numero_usuario)
+        else:
+            print(f"[ERROR] Fallo en generación de reporte: {resultado_reporte}")
+            send_message(resultado_reporte['mensaje'], numero_usuario)
+    
+    return {
+        'processed': True,
+        'user': numero_usuario,
+        'estado': resultado_estado['estado'],
+        'tipo_reporte': resultado_estado['tipo_reporte']
+    }
+
+
+# ===========================================================================
+# ENDPOINTS PARA REPORTES AUTOMÁTICOS
+# ===========================================================================
+
+@bp.route('/api/reports/start', methods=['POST'])
+def start_automatic_reports():
+    """Inicia los reportes automáticos (programa daily/weekly/monthly y configura webhook)."""
+    global reports_is_running, reports_destination, reports_daily_enabled, reports_weekly_enabled, reports_monthly_enabled
+    global REPORTS_DAILY_HOUR, REPORTS_DAILY_MINUTE, REPORTS_WEEKLY_DAY, REPORTS_WEEKLY_HOUR, REPORTS_WEEKLY_MINUTE
+    global REPORTS_MONTHLY_DAY, REPORTS_MONTHLY_HOUR, REPORTS_MONTHLY_MINUTE
+
+    if reports_is_running:
+        return jsonify({'success': False, 'message': 'Los reportes ya están activos'})
+
+    data = request.get_json() or {}
+    phone_number = data.get('number', '').strip()
+    if not phone_number:
+        return jsonify({'success': False, 'message': 'Debes proporcionar un número de teléfono'}), 400
+    is_valid, result = validate_phone(phone_number)
+    if not is_valid:
+        return jsonify({'success': False, 'message': result}), 400
+    reports_destination = result
+
+    # Actualizar configuraciones
+    reports_daily_enabled = data.get('daily_enabled', True)
+    reports_weekly_enabled = data.get('weekly_enabled', True)
+    reports_monthly_enabled = data.get('monthly_enabled', True)
+
+    REPORTS_DAILY_HOUR = data.get('daily_hour', REPORTS_DAILY_HOUR)
+    REPORTS_DAILY_MINUTE = data.get('daily_minute', REPORTS_DAILY_MINUTE)
+    REPORTS_WEEKLY_DAY = data.get('weekly_day', REPORTS_WEEKLY_DAY)
+    REPORTS_WEEKLY_HOUR = data.get('weekly_hour', REPORTS_WEEKLY_HOUR)
+    REPORTS_WEEKLY_MINUTE = data.get('weekly_minute', REPORTS_WEEKLY_MINUTE)
+    REPORTS_MONTHLY_DAY = data.get('monthly_day', REPORTS_MONTHLY_DAY)
+    REPORTS_MONTHLY_HOUR = data.get('monthly_hour', REPORTS_MONTHLY_HOUR)
+    REPORTS_MONTHLY_MINUTE = data.get('monthly_minute', REPORTS_MONTHLY_MINUTE)
+
+    print(f"[{datetime.now()}] Número de reportes actualizado: {reports_destination}")
+    print(f"[INFO] Habilitados: Diario={reports_daily_enabled}, Semanal={reports_weekly_enabled}, Mensual={reports_monthly_enabled}")
+
+    # Configurar webhook para recibir respuestas de WhatsApp
+    try:
+        webhook_ok = configure_evolution_webhook()
+        if webhook_ok:
+            print(f"[OK] Webhook de WhatsApp configurado para reportes interactivos")
+        else:
+            print(f"[WARN] No se pudo configurar el webhook de WhatsApp para reportes interactivos")
+    except Exception as e:
+        print(f"[WARN] Error configurando webhook de WhatsApp: {e}")
+
+    reports_is_running = True
+
+    # Programar los trabajos de reportes automáticos solo si están habilitados
+    try:
+        # Limpiar jobs anteriores
+        for job_id in ['daily_reports', 'weekly_reports', 'monthly_reports']:
+            try:
+                scheduler.remove_job(job_id)
+            except Exception:
+                pass
+        
+        # Reportes diarios
+        if reports_daily_enabled:
+            scheduler.add_job(
+                execute_daily_report,
+                trigger=CronTrigger(
+                    hour=REPORTS_DAILY_HOUR,
+                    minute=REPORTS_DAILY_MINUTE,
+                    timezone=REPORTS_TIMEZONE
+                ),
+                id='daily_reports',
+                replace_existing=True
+            )
+            print(f"[OK] Reporte diario programado para {REPORTS_DAILY_HOUR:02d}:{REPORTS_DAILY_MINUTE:02d}")
+        
+        # Reportes semanales
+        if reports_weekly_enabled:
+            scheduler.add_job(
+                execute_weekly_report,
+                trigger=CronTrigger(
+                    day_of_week=REPORTS_WEEKLY_DAY,
+                    hour=REPORTS_WEEKLY_HOUR,
+                    minute=REPORTS_WEEKLY_MINUTE,
+                    timezone=REPORTS_TIMEZONE
+                ),
+                id='weekly_reports',
+                replace_existing=True
+            )
+            print(f"[OK] Reporte semanal programado para {REPORTS_WEEKLY_DAY} {REPORTS_WEEKLY_HOUR:02d}:{REPORTS_WEEKLY_MINUTE:02d}")
+        
+        # Reportes mensuales
+        if reports_monthly_enabled:
+            scheduler.add_job(
+                execute_monthly_report,
+                trigger=CronTrigger(
+                    day=REPORTS_MONTHLY_DAY,
+                    hour=REPORTS_MONTHLY_HOUR,
+                    minute=REPORTS_MONTHLY_MINUTE,
+                    timezone=REPORTS_TIMEZONE
+                ),
+                id='monthly_reports',
+                replace_existing=True
+            )
+            print(f"[OK] Reporte mensual programado para día {REPORTS_MONTHLY_DAY} {REPORTS_MONTHLY_HOUR:02d}:{REPORTS_MONTHLY_MINUTE:02d}")
+        
+        print(f"[OK] Reportes automáticos configurados para {reports_destination}")
+    except Exception as e:
+        print(f"[ERROR] Error al programar reportes automáticos: {e}")
+
+    return jsonify({
+        'success': True,
+        'message': f'Reportes automáticos programados para el número {reports_destination}',
+        'destination': reports_destination,
+        'daily_enabled': reports_daily_enabled,
+        'weekly_enabled': reports_weekly_enabled,
+        'monthly_enabled': reports_monthly_enabled,
+    })
+
+
+@bp.route('/api/reports/stop', methods=['GET'])
+def stop_automatic_reports():
+    """Detiene los reportes automáticos."""
+    global reports_is_running
+    
+    if not reports_is_running:
+        return jsonify({'success': False, 'message': 'Los reportes automáticos no están activos'})
+    
+    try:
+        scheduler.remove_job('daily_reports')
+        scheduler.remove_job('weekly_reports')
+        scheduler.remove_job('monthly_reports')
+    except Exception as e:
+        print(f"[WARN] Error al remover trabajos: {e}")
+    
+    reports_is_running = False
+    return jsonify({'success': True, 'message': 'Reportes automáticos detenidos'})
+
+
+@bp.route('/api/reports/toggle', methods=['POST'])
+def toggle_report_enabled():
+    """Toggles the enabled state of a specific report type (daily/weekly/monthly)."""
+    global reports_daily_enabled, reports_weekly_enabled, reports_monthly_enabled
+
+    data = request.get_json() or {}
+    report_type = data.get('type')  # 'daily', 'weekly', or 'monthly'
+    enabled = data.get('enabled')
+
+    if report_type not in ['daily', 'weekly', 'monthly']:
+        return jsonify({'success': False, 'message': 'Invalid report type'}), 400
+
+    if enabled is None:
+        return jsonify({'success': False, 'message': 'Enabled state is required'}), 400
+
+    # Update the global state
+    if report_type == 'daily':
+        reports_daily_enabled = enabled
+        if reports_is_running:
+            if enabled:
+                scheduler.add_job(
+                    execute_daily_report,
+                    trigger=CronTrigger(
+                        hour=REPORTS_DAILY_HOUR,
+                        minute=REPORTS_DAILY_MINUTE,
+                        timezone=REPORTS_TIMEZONE
+                    ),
+                    id='daily_reports',
+                    replace_existing=True
+                )
+            else:
+                try:
+                    scheduler.remove_job('daily_reports')
+                except Exception:
+                    pass
+    elif report_type == 'weekly':
+        reports_weekly_enabled = enabled
+        if reports_is_running:
+            if enabled:
+                scheduler.add_job(
+                    execute_weekly_report,
+                    trigger=CronTrigger(
+                        day_of_week=REPORTS_WEEKLY_DAY,
+                        hour=REPORTS_WEEKLY_HOUR,
+                        minute=REPORTS_WEEKLY_MINUTE,
+                        timezone=REPORTS_TIMEZONE
+                    ),
+                    id='weekly_reports',
+                    replace_existing=True
+                )
+            else:
+                try:
+                    scheduler.remove_job('weekly_reports')
+                except Exception:
+                    pass
+    elif report_type == 'monthly':
+        reports_monthly_enabled = enabled
+        if reports_is_running:
+            if enabled:
+                scheduler.add_job(
+                    execute_monthly_report,
+                    trigger=CronTrigger(
+                        day=REPORTS_MONTHLY_DAY,
+                        hour=REPORTS_MONTHLY_HOUR,
+                        minute=REPORTS_MONTHLY_MINUTE,
+                        timezone=REPORTS_TIMEZONE
+                    ),
+                    id='monthly_reports',
+                    replace_existing=True
+                )
+            else:
+                try:
+                    scheduler.remove_job('monthly_reports')
+                except Exception:
+                    pass
+
+    return jsonify({
+        'success': True,
+        'message': f'Reporte {report_type} {"habilitado" if enabled else "deshabilitado"}',
+        'daily_enabled': reports_daily_enabled,
+        'weekly_enabled': reports_weekly_enabled,
+        'monthly_enabled': reports_monthly_enabled
+    })
+
+
+@bp.route('/api/reports/status', methods=['GET'])
+def get_reports_status():
+    """Obtiene el estado de los reportes automáticos."""
+    daily_job = scheduler.get_job('daily_reports')
+    weekly_job = scheduler.get_job('weekly_reports')
+    monthly_job = scheduler.get_job('monthly_reports')
+    
+    return jsonify({
+        'is_running': reports_is_running,
+        'destination': reports_destination,
+        'last_daily': reports_last_daily,
+        'last_weekly': reports_last_weekly,
+        'last_monthly': reports_last_monthly,
+        'daily_enabled': reports_daily_enabled,
+        'weekly_enabled': reports_weekly_enabled,
+        'monthly_enabled': reports_monthly_enabled,
+        'daily': {
+            'time': f'{REPORTS_DAILY_HOUR:02d}:{REPORTS_DAILY_MINUTE:02d}',
+            'types': REPORTS_DAILY_TYPES,
+            'next_run': str(daily_job.next_run_time) if daily_job else None
+        },
+        'weekly': {
+            'day': REPORTS_WEEKLY_DAY,
+            'time': f'{REPORTS_WEEKLY_HOUR:02d}:{REPORTS_WEEKLY_MINUTE:02d}',
+            'types': REPORTS_WEEKLY_TYPES,
+            'next_run': str(weekly_job.next_run_time) if weekly_job else None
+        },
+        'monthly': {
+            'day': REPORTS_MONTHLY_DAY,
+            'time': f'{REPORTS_MONTHLY_HOUR:02d}:{REPORTS_MONTHLY_MINUTE:02d}',
+            'types': REPORTS_MONTHLY_TYPES,
+            'next_run': str(monthly_job.next_run_time) if monthly_job else None
+        },
+        'timezone': REPORTS_TIMEZONE
+    })
+
+
+@bp.route('/api/reports/test-daily', methods=['GET'])
+def test_daily_reports():
+    """Ejecuta manualmente un reporte automático diario para pruebas."""
+    print(f"[{datetime.now()}] TEST-DAILY: Ejecutando reporte automático diario manual...")
+    
+    if _flask_app:
+        with _flask_app.app_context():
+            execute_daily_report()
+    else:
+        execute_daily_report()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Reporte automático diario ejecutado manualmente. Revisa tu WhatsApp.',
+        'destination': reports_destination,
+        'last_daily': reports_last_daily,
+        'types': REPORTS_DAILY_TYPES
+    })
+
+
+@bp.route('/api/reports/test-weekly', methods=['GET'])
+def test_weekly_reports():
+    """Ejecuta manualmente un reporte automático semanal para pruebas."""
+    print(f"[{datetime.now()}] TEST-WEEKLY: Ejecutando reporte automático semanal manual...")
+    
+    if _flask_app:
+        with _flask_app.app_context():
+            execute_weekly_report()
+    else:
+        execute_weekly_report()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Reporte automático semanal ejecutado manualmente. Revisa tu WhatsApp.',
+        'destination': reports_destination,
+        'last_weekly': reports_last_weekly,
+        'types': REPORTS_WEEKLY_TYPES
+    })
+
+
+@bp.route('/api/reports/test-monthly', methods=['GET'])
+def test_monthly_reports():
+    """Ejecuta manualmente un reporte automático mensual para pruebas."""
+    print(f"[{datetime.now()}] TEST-MONTHLY: Ejecutando reporte automático mensual manual...")
+    
+    if _flask_app:
+        with _flask_app.app_context():
+            execute_monthly_report()
+    else:
+        execute_monthly_report()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Reporte automático mensual ejecutado manualmente. Revisa tu WhatsApp.',
+        'destination': reports_destination,
+        'last_monthly': reports_last_monthly,
+        'types': REPORTS_MONTHLY_TYPES
+    })
+
+
+@bp.route('/api/reports/interactive', methods=['GET'])
+def get_interactive_status():
+    """Obtiene el estado de las conversaciones interactivas."""
+    return jsonify({
+        'available_reports': {
+            key: {
+                'nombre': report['nombre'],
+                'descripcion': report['descripcion']
+            }
+            for key, report in REPORT_TYPES.items()
+        },
+        'message': 'Envía un mensaje por WhatsApp a la conversación activa para iniciar un reporte interactivo'
+    })

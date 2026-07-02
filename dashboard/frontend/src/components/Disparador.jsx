@@ -20,10 +20,47 @@ function Disparador() {
   const [isEditingBackup, setIsEditingBackup] = useState(false);
   const backupInputRef = useRef(null);
 
+  // ===================== ESTADOS REPORTES AUTOMÁTICOS =====================
+  const [reportsRunning, setReportsRunning] = useState(false);
+  const [reportsStatus, setReportsStatus] = useState({});
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsPhone, setReportsPhone] = useState("51900685850");
+  const [reportsError, setReportsError] = useState("");
+  const [isEditingReports, setIsEditingReports] = useState(false);
+  const reportsInputRef = useRef(null);
+
+  // Configuración de horarios y habilitación
+  const [dailyEnabled, setDailyEnabled] = useState(true);
+  const [dailyHour, setDailyHour] = useState(8);
+  const [dailyMinute, setDailyMinute] = useState(0);
+  const [weeklyEnabled, setWeeklyEnabled] = useState(true);
+  const [weeklyDay, setWeeklyDay] = useState("MON");
+  const [weeklyHour, setWeeklyHour] = useState(9);
+  const [weeklyMinute, setWeeklyMinute] = useState(0);
+  const [monthlyEnabled, setMonthlyEnabled] = useState(true);
+  const [monthlyDay, setMonthlyDay] = useState(1);
+  const [monthlyHour, setMonthlyHour] = useState(10);
+  const [monthlyMinute, setMonthlyMinute] = useState(0);
+
+  const handleToggleReport = async (type, enabled) => {
+    try {
+      const res = await axios.post('/api/reports/toggle', { type, enabled });
+      if (res.data.success) {
+        if (type === 'daily') setDailyEnabled(enabled);
+        if (type === 'weekly') setWeeklyEnabled(enabled);
+        if (type === 'monthly') setMonthlyEnabled(enabled);
+        fetchReportsStatus(false);
+      }
+    } catch (e) {
+      console.error('Error toggling report:', e);
+    }
+  };
+
   // ===================== CARGA INICIAL =====================
   useEffect(() => {
     fetchStatus(true);
     fetchBackupStatus(true);
+    fetchReportsStatus(true);
   }, []);
 
   // ===================== POLLING MENSAJE =====================
@@ -39,6 +76,13 @@ function Disparador() {
     const interval = setInterval(() => fetchBackupStatus(false), 5000);
     return () => clearInterval(interval);
   }, [backupRunning]);
+
+  // ===================== POLLING REPORTES =====================
+  useEffect(() => {
+    if (!reportsRunning) return;
+    const interval = setInterval(() => fetchReportsStatus(false), 5000);
+    return () => clearInterval(interval);
+  }, [reportsRunning]);
 
   // ===================== HELPERS =====================
   const validateInput = (number) => {
@@ -190,6 +234,89 @@ function Disparador() {
 
   const handleBackupInputBlur = () => setIsEditingBackup(false);
   const handleBackupInputFocus = () => setIsEditingBackup(true);
+
+  // ===================== REPORTES - FETCH =====================
+  const fetchReportsStatus = async (updatePhone = false) => {
+    try {
+      const res = await axios.get("/api/reports/status");
+      setReportsStatus(res.data);
+      setReportsRunning(res.data.is_running);
+      if (updatePhone && !isEditingReports && res.data.destination) {
+        setReportsPhone(res.data.destination);
+      }
+      // Actualizar flags de habilitación desde el backend
+      if (res.data.daily_enabled !== undefined) setDailyEnabled(res.data.daily_enabled);
+      if (res.data.weekly_enabled !== undefined) setWeeklyEnabled(res.data.weekly_enabled);
+      if (res.data.monthly_enabled !== undefined) setMonthlyEnabled(res.data.monthly_enabled);
+    } catch (e) {
+      console.log("Error fetching reports status:", e);
+    }
+  };
+
+  // ===================== REPORTES - START / STOP =====================
+  const handleReportsStart = async () => {
+    setReportsError("");
+    const validationError = validateInput(reportsPhone);
+    if (validationError) {
+      setReportsError(validationError);
+      return;
+    }
+    setReportsLoading(true);
+    try {
+      const res = await axios.post("/api/reports/start", {
+        number: reportsPhone.trim(),
+        daily_enabled: dailyEnabled,
+        weekly_enabled: weeklyEnabled,
+        monthly_enabled: monthlyEnabled,
+        daily_hour: dailyHour,
+        daily_minute: dailyMinute,
+        weekly_day: weeklyDay,
+        weekly_hour: weeklyHour,
+        weekly_minute: weeklyMinute,
+        monthly_day: monthlyDay,
+        monthly_hour: monthlyHour,
+        monthly_minute: monthlyMinute,
+      });
+      if (res.data.success) {
+        setReportsRunning(true);
+        setReportsStatus(res.data);
+      } else {
+        setReportsError(res.data.message);
+      }
+    } catch (e) {
+      const errorMsg = e.response?.data?.message || e.message;
+      setReportsError("Error al iniciar: " + errorMsg);
+    }
+    setReportsLoading(false);
+  };
+
+  const handleReportsStop = async () => {
+    setReportsLoading(true);
+    try {
+      const res = await axios.get("/api/reports/stop");
+      if (res.data.success) {
+        setReportsRunning(false);
+        fetchReportsStatus(true);
+      }
+    } catch (e) {
+      setReportsError("Error al detener: " + e.message);
+    }
+    setReportsLoading(false);
+  };
+
+  // ===================== REPORTES - INPUT HANDLERS =====================
+  const handleReportsInputChange = (e) => {
+    setIsEditingReports(true);
+    setReportsPhone(e.target.value);
+    setReportsError("");
+    clearTimeout(window.reportsEditTimeout);
+    window.reportsEditTimeout = setTimeout(() => {
+      setIsEditingReports(false);
+    }, 2000);
+  };
+
+  const handleReportsInputBlur = () => setIsEditingReports(false);
+  const handleReportsInputFocus = () => setIsEditingReports(true);
 
   // ===================== RENDER =====================
   return (
@@ -401,6 +528,359 @@ function Disparador() {
             <li>Alerta por WhatsApp si falta backup</li>
             <li>Responda "RESUELVE BACKUP" para ejecutar</li>
             <li>Webhook configurado automaticamente</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* ========== REPORTES AUTOMÁTICOS ========== */}
+      <div className="card">
+        <div className="card-header">
+          <h2>📊 Reportes Automáticos</h2>
+          <div
+            className={`status-badge ${
+              reportsRunning ? "active" : "inactive"
+            }`}
+          >
+            {reportsRunning ? "En ejecucion" : "Detenido"}
+          </div>
+        </div>
+
+        <div className="card-body">
+          <div className="info-grid">
+            <div className="info-item">
+              <label>Destino:</label>
+              {reportsRunning ? (
+                <span className="value">{reportsPhone}</span>
+              ) : (
+                <>
+                  <input
+                    ref={reportsInputRef}
+                    type="text"
+                    className={`phone-input ${reportsError ? "error" : ""}`}
+                    value={reportsPhone}
+                    onChange={handleReportsInputChange}
+                    onBlur={handleReportsInputBlur}
+                    onFocus={handleReportsInputFocus}
+                    placeholder="519XXXXXXXX"
+                    disabled={reportsRunning}
+                    autoComplete="off"
+                  />
+                  <span className="input-hint">
+                    Ej: 51952310138 (11 dígitos)
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="info-item">
+              <label>Proximo diario:</label>
+              <span className="value">
+                {reportsStatus.daily?.next_run
+                  ? new Date(reportsStatus.daily.next_run).toLocaleString()
+                  : "--"}
+              </span>
+            </div>
+            <div className="info-item">
+              <label>Proximo semanal:</label>
+              <span className="value">
+                {reportsStatus.weekly?.next_run
+                  ? new Date(reportsStatus.weekly.next_run).toLocaleString()
+                  : "--"}
+              </span>
+            </div>
+            <div className="info-item">
+              <label>Proximo mensual:</label>
+              <span className="value">
+                {reportsStatus.monthly?.next_run
+                  ? new Date(reportsStatus.monthly.next_run).toLocaleString()
+                  : "--"}
+              </span>
+            </div>
+          </div>
+
+          {/* CONFIGURACIÓN DE HORARIOS */}
+          <div className="schedules-config">
+              <h4>⚙️ Configuración de Horarios</h4>
+              
+              {/* DIARIO */}
+              <div className="schedule-config-item">
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                  <label className="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      id="daily-enabled" 
+                      checked={dailyEnabled} 
+                      onChange={(e) => {
+                        if (reportsRunning) {
+                          handleToggleReport('daily', e.target.checked);
+                        } else {
+                          setDailyEnabled(e.target.checked);
+                        }
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <label htmlFor="daily-enabled" style={{fontWeight: 'bold', margin: 0, cursor: 'pointer'}}>📅 Reporte Diario</label>
+                </div>
+                <div className="time-inputs" style={{opacity: dailyEnabled ? 1 : 0.5}}>
+                  <div className="time-input-group">
+                    <label>Hora:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={dailyHour}
+                      onChange={(e) => setDailyHour(parseInt(e.target.value) || 0)}
+                      disabled={reportsRunning || !dailyEnabled}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label>Minuto:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={dailyMinute}
+                      onChange={(e) => setDailyMinute(parseInt(e.target.value) || 0)}
+                      disabled={reportsRunning || !dailyEnabled}
+                    />
+                  </div>
+                  <div className="time-preview">
+                    {String(dailyHour).padStart(2, "0")}:{String(dailyMinute).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+
+              {/* SEMANAL */}
+              <div className="schedule-config-item">
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                  <label className="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      id="weekly-enabled" 
+                      checked={weeklyEnabled} 
+                      onChange={(e) => {
+                        if (reportsRunning) {
+                          handleToggleReport('weekly', e.target.checked);
+                        } else {
+                          setWeeklyEnabled(e.target.checked);
+                        }
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <label htmlFor="weekly-enabled" style={{fontWeight: 'bold', margin: 0, cursor: 'pointer'}}>📆 Reporte Semanal</label>
+                </div>
+                <div className="time-inputs" style={{opacity: weeklyEnabled ? 1 : 0.5}}>
+                  <div className="time-input-group">
+                    <label>Día:</label>
+                    <select value={weeklyDay} onChange={(e) => setWeeklyDay(e.target.value)} disabled={reportsRunning || !weeklyEnabled}>
+                      <option value="MON">Lunes</option>
+                      <option value="TUE">Martes</option>
+                      <option value="WED">Miércoles</option>
+                      <option value="THU">Jueves</option>
+                      <option value="FRI">Viernes</option>
+                      <option value="SAT">Sábado</option>
+                      <option value="SUN">Domingo</option>
+                    </select>
+                  </div>
+                  <div className="time-input-group">
+                    <label>Hora:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={weeklyHour}
+                      onChange={(e) => setWeeklyHour(parseInt(e.target.value) || 0)}
+                      disabled={reportsRunning || !weeklyEnabled}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label>Minuto:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={weeklyMinute}
+                      onChange={(e) => setWeeklyMinute(parseInt(e.target.value) || 0)}
+                      disabled={reportsRunning || !weeklyEnabled}
+                    />
+                  </div>
+                  <div className="time-preview">
+                    {weeklyDay} {String(weeklyHour).padStart(2, "0")}:{String(weeklyMinute).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+
+              {/* MENSUAL */}
+              <div className="schedule-config-item">
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                  <label className="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      id="monthly-enabled" 
+                      checked={monthlyEnabled} 
+                      onChange={(e) => {
+                        if (reportsRunning) {
+                          handleToggleReport('monthly', e.target.checked);
+                        } else {
+                          setMonthlyEnabled(e.target.checked);
+                        }
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <label htmlFor="monthly-enabled" style={{fontWeight: 'bold', margin: 0, cursor: 'pointer'}}>🗓️ Reporte Mensual</label>
+                </div>
+                <div className="time-inputs" style={{opacity: monthlyEnabled ? 1 : 0.5}}>
+                  <div className="time-input-group">
+                    <label>Día del mes:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={monthlyDay}
+                      onChange={(e) => setMonthlyDay(parseInt(e.target.value) || 1)}
+                      disabled={reportsRunning || !monthlyEnabled}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label>Hora:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={monthlyHour}
+                      onChange={(e) => setMonthlyHour(parseInt(e.target.value) || 0)}
+                      disabled={reportsRunning || !monthlyEnabled}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label>Minuto:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={monthlyMinute}
+                      onChange={(e) => setMonthlyMinute(parseInt(e.target.value) || 0)}
+                      disabled={reportsRunning || !monthlyEnabled}
+                    />
+                  </div>
+                  <div className="time-preview">
+                    Día {monthlyDay} {String(monthlyHour).padStart(2, "0")}:{String(monthlyMinute).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          <div className="schedule-info">
+            <div className="schedule-box">
+              <strong>
+                📅 Reportes Diarios{" "}
+                <span style={{fontSize: '0.8em', color: reportsStatus.daily_enabled ? 'green' : 'red'}}>
+                  [{reportsStatus.daily_enabled ? "HABILITADO" : "DESHABILITADO"}]
+                </span>
+              </strong>
+              <p>
+                Hora: {reportsStatus.daily?.time || "--"} ({reportsStatus.timezone})
+              </p>
+              <p>
+                Tipos:{" "}
+                {Array.isArray(reportsStatus.daily?.types)
+                  ? reportsStatus.daily.types.join(", ")
+                  : "--"}
+              </p>
+            </div>
+            <div className="schedule-box">
+              <strong>
+                📆 Reportes Semanales{" "}
+                <span style={{fontSize: '0.8em', color: reportsStatus.weekly_enabled ? 'green' : 'red'}}>
+                  [{reportsStatus.weekly_enabled ? "HABILITADO" : "DESHABILITADO"}]
+                </span>
+              </strong>
+              <p>
+                Día: {reportsStatus.weekly?.day || "--"} a las{" "}
+                {reportsStatus.weekly?.time || "--"}
+              </p>
+              <p>
+                Tipos:{" "}
+                {Array.isArray(reportsStatus.weekly?.types)
+                  ? reportsStatus.weekly.types.join(", ")
+                  : "--"}
+              </p>
+            </div>
+            <div className="schedule-box">
+              <strong>
+                🗓️ Reportes Mensuales{" "}
+                <span style={{fontSize: '0.8em', color: reportsStatus.monthly_enabled ? 'green' : 'red'}}>
+                  [{reportsStatus.monthly_enabled ? "HABILITADO" : "DESHABILITADO"}]
+                </span>
+              </strong>
+              <p>
+                Día: {reportsStatus.monthly?.day || "--"} a las{" "}
+                {reportsStatus.monthly?.time || "--"}
+              </p>
+              <p>
+                Tipos:{" "}
+                {Array.isArray(reportsStatus.monthly?.types)
+                  ? reportsStatus.monthly.types.join(", ")
+                  : "--"}
+              </p>
+            </div>
+          </div>
+
+          {reportsError && (
+            <div className="error-message">
+              <strong>Error:</strong> {reportsError}
+            </div>
+          )}
+
+          <div className="action-area">
+            {reportsRunning ? (
+              <button
+                className="btn btn-danger"
+                onClick={handleReportsStop}
+                disabled={reportsLoading}
+              >
+                {reportsLoading ? "Deteniendo..." : "Detener"}
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={handleReportsStart}
+                disabled={reportsLoading}
+              >
+                {reportsLoading ? "Iniciando..." : "Iniciar Reportes"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h3>Reportes Interactivos</h3>
+        </div>
+        <div className="card-body">
+          <p className="description">
+            Después de activar los reportes, los usuarios pueden enviar mensajes por
+            WhatsApp para solicitar reportes bajo demanda de forma interactiva.
+          </p>
+          <div className="interactive-info">
+            <strong>🎯 Flujo interactivo:</strong>
+            <ol>
+              <li>Usuario envía cualquier mensaje a la conversación</li>
+              <li>Sistema muestra menú de tipos de reportes disponibles</li>
+              <li>Usuario selecciona (1-5) el reporte que desea</li>
+              <li>Sistema genera y envía el reporte en tiempo real</li>
+              <li>Se ofrece opción de generar otro reporte o cancelar</li>
+            </ol>
+          </div>
+          <ul className="feature-list">
+            <li>✅ Estadísticas Generales</li>
+            <li>✅ Libros Más Prestados</li>
+            <li>✅ Multas Pendientes</li>
+            <li>✅ Préstamos Vencidos</li>
+            <li>✅ Libros Dañados (últimos 30 días)</li>
           </ul>
         </div>
       </div>
