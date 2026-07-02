@@ -42,11 +42,13 @@ def send_message(text, number=None):
     
     try:
         print(f"[DEBUG WhatsApp] POST {url}")
-        print(f"[DEBUG WhatsApp] Headers: {HEADERS}")
-        print(f"[DEBUG WhatsApp] Payload: {payload}")
+        # Print safely without encoding errors
+        print(f"[DEBUG WhatsApp] Headers: apikey=***, Content-Type={HEADERS['Content-Type']}")
+        # Use repr to safely print payload
+        print(f"[DEBUG WhatsApp] Payload: {repr(payload)}")
         response = requests.post(url, headers=HEADERS, json=payload, timeout=30)
         print(f"[DEBUG WhatsApp] Status: {response.status_code}")
-        print(f"[DEBUG WhatsApp] Response: {response.text[:500]}")
+        print(f"[DEBUG WhatsApp] Response: {repr(response.text[:500])}")
         try:
             data = response.json()
         except Exception:
@@ -59,7 +61,7 @@ def send_message(text, number=None):
         }
 
     except Exception as e:
-        print(f"[DEBUG WhatsApp] Exception: {e}")
+        print(f"[DEBUG WhatsApp] Exception: {repr(e)}")
         return {
             'success': False,
             'error': str(e)
