@@ -36,7 +36,7 @@ def create_database_if_not_exists():
 
 def create_tables():
     """Crea todas las tablas definidas en los modelos SQLAlchemy."""
-    from models import Autor, Categoria, Libro, Lector, Prestamo, Devolucion, Multa, UsuarioSistema, Auditoria
+    from models import Autor, Categoria, Libro, Lector, Prestamo, Devolucion, Multa, UsuarioSistema, Auditoria, UserConversation
     Base.metadata.create_all(engine)
     print("[OK] Tablas creadas exitosamente.")
 

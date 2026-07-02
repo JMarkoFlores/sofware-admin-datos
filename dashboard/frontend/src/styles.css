@@ -1056,7 +1056,227 @@ body {
 .r-summary-label { font-size: 11px; color: #64748b; margin-top: 2px; }
 .spinning svg { animation: spin .8s linear infinite; }
 
-/* RESPONSIVE PREMIUM */
+/* ===== SCHEDULES CONFIGURATION ===== */
+.schedules-config {
+  background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.schedules-config h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-config-item {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.schedule-config-item strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.time-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 90px;
+}
+
+.time-input-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.time-input-group input,
+.time-input-group select {
+  padding: 10px 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  background-color: #fff;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+  cursor: pointer;
+}
+
+.time-input-group input:focus,
+.time-input-group select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.time-input-group input:disabled,
+.time-input-group select:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.time-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #dbeafe, #eff6ff);
+  border: 1.5px solid #93c5fd;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e40af;
+  min-width: 110px;
+  text-align: center;
+}
+
+/* ===== SCHEDULE BOXES INFO ===== */
+.schedule-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.schedule-box {
+  background: linear-gradient(135deg, #e0f2fe, #e0e7ff);
+  border: 1.5px solid #93c5fd;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.schedule-box strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e40af;
+  margin-bottom: 10px;
+}
+
+.schedule-box p {
+  font-size: 13px;
+  color: #1e3a8a;
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1024px) {
+  .schedule-info {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .time-inputs {
+    flex-direction: column;
+  }
+  
+  .time-preview {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .schedule-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .schedules-config {
+    padding: 16px;
+  }
+  
+  .schedule-config-item {
+    padding: 14px;
+  }
+  
+  .time-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .time-input-group {
+    min-width: 100%;
+  }
+  
+  .time-input-group input,
+  .time-input-group select {
+    width: 100%;
+  }
+  
+  .time-preview {
+    width: 100%;
+  }
+}
+
+/* ===== TOGGLE SWITCH ===== */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  transition: .2s;
+  border-radius: 28px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,.2);
+}
+input:checked + .slider {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+}
+input:checked + .slider:before {
+  transform: translateX(22px);
+}
+
+/* ===== RESPONSIVE PREMIUM ===== */
 @media (max-width: 1100px) {
   .m-kpi-grid    { grid-template-columns: repeat(2, 1fr); }
   .r-charts-grid { grid-template-columns: 1fr 1fr; }

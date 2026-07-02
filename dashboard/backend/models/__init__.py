@@ -8,6 +8,7 @@ from .devolucion import Devolucion
 from .multa import Multa
 from .usuario_sistema import UsuarioSistema
 from .auditoria import Auditoria
+from .user_conversation import UserConversation
 
 __all__ = [
     'db',
@@ -20,4 +21,5 @@ __all__ = [
     'Multa',
     'UsuarioSistema',
     'Auditoria',
+    'UserConversation',
 ]

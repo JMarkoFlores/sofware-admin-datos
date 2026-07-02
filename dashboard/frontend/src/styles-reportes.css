@@ -1,0 +1,73 @@
+/* ===== REPORTES AUTOMÁTICOS ===== */
+.schedule-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 20px 0 24px 0;
+}
+
+.schedule-box {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1.5px solid #0ea5e9;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 13px;
+}
+
+.schedule-box strong {
+  display: block;
+  color: #0c4a6e;
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.schedule-box p {
+  color: #064e3b;
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.interactive-info {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.interactive-info strong {
+  color: #92400e;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.interactive-info ol {
+  margin-left: 20px;
+  color: #78350f;
+  font-size: 13px;
+}
+
+.interactive-info ol li {
+  margin: 6px 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .schedule-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-area {
+    flex-direction: column;
+  }
+  
+  .action-area .btn {
+    width: 100%;
+  }
+}

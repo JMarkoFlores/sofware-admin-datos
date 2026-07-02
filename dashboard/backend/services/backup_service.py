@@ -282,12 +282,12 @@ def procesar_comando_backup(texto, numero_remoto, numero_destino_configurado):
     # Validar que el comando sea exacto
     if texto_limpio != "RESUELVE BACKUP":
         print(f"[DEBUG procesar_comando_backup] Comando no reconocido: '{texto_limpio}'")
-        return {'procesado': False, 'razon': 'Comando no reconocido'}
+        return {'processed': False, 'reason': 'Comando no reconocido'}
 
     # Validar que el remitente sea el número destino configurado
     if numero_remoto != numero_destino_configurado:
         print(f"[DEBUG procesar_comando_backup] Número no autorizado: {numero_remoto} != {numero_destino_configurado}")
-        return {'procesado': False, 'razon': 'Número no autorizado'}
+        return {'processed': False, 'reason': 'Número no autorizado'}
 
     print(f"[DEBUG procesar_comando_backup] Comando y número validados correctamente.")
 
@@ -327,7 +327,7 @@ def procesar_comando_backup(texto, numero_remoto, numero_destino_configurado):
             print(f"[DEBUG procesar_comando_backup] Auditoría (éxito) registrada.")
         except Exception as e:
             print(f"[DEBUG procesar_comando_backup] ERROR al registrar auditoría (éxito): {e}")
-        return {'procesado': True, 'exito': True, 'mensaje': resultado['mensaje']}
+        return {'processed': True, 'exito': True, 'mensaje': resultado['mensaje']}
     else:
         print(f"[DEBUG procesar_comando_backup] Backup falló. Enviando mensaje de error...")
         enviar_error_backup(numero_destino_configurado)
@@ -343,4 +343,4 @@ def procesar_comando_backup(texto, numero_remoto, numero_destino_configurado):
             print(f"[DEBUG procesar_comando_backup] Auditoría (fallo) registrada.")
         except Exception as e:
             print(f"[DEBUG procesar_comando_backup] ERROR al registrar auditoría (fallo): {e}")
-        return {'procesado': True, 'exito': False, 'mensaje': resultado['mensaje']}
+        return {'processed': True, 'exito': False, 'mensaje': resultado['mensaje']}

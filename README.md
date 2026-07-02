@@ -2,6 +2,56 @@
 
 Sistema de monitoreo que consulta SQL Server y envía reportes periódicos de tablas por WhatsApp vía Evolution API. Incluye backend en Flask, frontend en React y servicios Docker para la infraestructura de mensajería.
 
+## ✨ Características Nuevas: Reportes Interactivos por WhatsApp
+
+### 🎯 Flujos Implementados
+
+#### 1. Reportes Automáticos Diarios y Semanales
+- 📅 Reportes programados a horas configurables
+- 📊 5 tipos diferentes de reportes (estadísticas, multas, libros, etc.)
+- 🔔 Envío automático por WhatsApp en horarios definidos
+- ⚙️ Totalmente personalizable via `.env`
+
+#### 2. Reportes Interactivos Bajo Demanda
+- 💬 Menús dinámicos sin comandos predefinidos
+- 🔄 Conversaciones persistentes por usuario
+- 📝 Usuario selecciona tipo de reporte (1-5)
+- 🔁 Opción de generar otro reporte o cancelar
+- ⏱️ Sesiones con timeout configurable
+
+#### 3. Gestión Centralizada desde Panel
+- 🎛️ Botón para iniciar/detener reportes automáticos
+- 📱 Ingreso de número de WhatsApp editable
+- 🧪 Botones de prueba para validar configuración
+- 📈 Visualización de próximos reportes programados
+
+### 📊 Tipos de Reportes
+
+| # | Nombre | Descripción |
+|---|--------|-------------|
+| 1 | 📊 Estadísticas Generales | Total libros, autores, categorías, lectores, préstamos, multas |
+| 2 | 📚 Libros Más Prestados | Top 5 de libros más solicitados |
+| 3 | 💰 Multas Pendientes | Cantidad y monto total |
+| 4 | ⏰ Préstamos Vencidos | Últimos 10 préstamos con retraso |
+| 5 | 🔴 Libros Dañados | Reportes de daño (últimos 30 días) |
+
+### 🚀 Inicio Rápido
+
+Ver: **[QUICKSTART_REPORTES.md](QUICKSTART_REPORTES.md)**
+
+Resumen:
+1. `python database/init_db.py` - Crear tablas
+2. `python app.py` - Iniciar backend
+3. `npm run dev` - Iniciar frontend
+4. Ir a Disparador → Reportes Automáticos
+5. Ingresar número de WhatsApp e "Iniciar Reportes"
+
+### 📚 Documentación Completa
+
+- **[QUICKSTART_REPORTES.md](QUICKSTART_REPORTES.md)** - Guía de inicio rápido
+- **[REPORTES_INTERACTIVOS.md](REPORTES_INTERACTIVOS.md)** - Documentación completa
+- **[IMPLEMENTACION_REPORTES.txt](IMPLEMENTACION_REPORTES.txt)** - Resumen técnico de cambios
+
 ## Arquitectura
 
 - **Evolution API** (Docker): Servicio de WhatsApp (puerto `8080`).
@@ -14,7 +64,7 @@ Sistema de monitoreo que consulta SQL Server y envía reportes periódicos de ta
 - Docker y Docker Compose
 - Python 3.11+
 - Node.js 18+
-- SQL Server con base de datos `TenebrosaOLTP`
+- SQL Server con base de datos `TenebrosaOLTP` y `Bibliouni`
 - ODBC Driver 17 para SQL Server
 
 ## Configuración
@@ -31,6 +81,27 @@ Sistema de monitoreo que consulta SQL Server y envía reportes periódicos de ta
    - Conexión a SQL Server (`DB_SERVER`, `DB_NAME`, etc.)
    - URL y API Key de Evolution API (`EVOLUTION_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`)
    - Número de destino por defecto (`WHATSAPP_DESTINATION`)
+   - **Nuevo:** Configuración de reportes automáticos (ver abajo)
+
+## Configuración de Reportes Automáticos
+
+Agregar a `dashboard/backend/.env`:
+
+```env
+# Reportes Diarios
+REPORTS_DAILY_HOUR=8
+REPORTS_DAILY_MINUTE=0
+REPORTS_DAILY_TYPES=estadisticas,multas
+
+# Reportes Semanales
+REPORTS_WEEKLY_DAY=MON
+REPORTS_WEEKLY_HOUR=9
+REPORTS_WEEKLY_MINUTE=0
+REPORTS_WEEKLY_TYPES=estadisticas,libros_prestados,devoluciones_pendientes
+
+# Zona Horaria
+REPORTS_TIMEZONE=America/Lima
+```
 
 ## Ejecución
 
@@ -38,16 +109,32 @@ Sistema de monitoreo que consulta SQL Server y envía reportes periódicos de ta
 # 1. Infraestructura (Evolution API + PostgreSQL + Redis)
 docker-compose up -d
 
-# 2. Backend
+# 2. Inicializar base de datos (crea tabla user_conversations)
 cd dashboard/backend
-pip install -r requirements.txt
+python database/init_db.py
+
+# 3. Backend
 python app.py
 
-# 3. Frontend (en otra terminal)
+# 4. Frontend (en otra terminal)
 cd dashboard/frontend
 npm install
 npm run dev
 ```
+
+## 📁 Archivos Nuevos/Modificados
+
+### Nuevos
+- `models/user_conversation.py` - Modelo para persistencia de conversaciones
+- `services/interactive_reports_service.py` - Lógica de menús interactivos
+- `REPORTES_INTERACTIVOS.md` - Documentación de reportes
+- `QUICKSTART_REPORTES.md` - Guía de inicio rápido
+
+### Modificados
+- `services/reporte_service.py` - +5 tipos de reportes
+- `routes/disparador.py` - +5 endpoints de reportes
+- `frontend/src/components/Disparador.jsx` - Nueva sección de reportes
+- `dashboard/backend/.env` - Variables de reportes
 
 ## Uso
 
