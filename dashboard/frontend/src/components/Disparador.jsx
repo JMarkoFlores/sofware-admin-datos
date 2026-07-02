@@ -12,6 +12,8 @@ import {
   FiPhone,
   FiSettings,
   FiActivity,
+  FiCalendar,
+  FiList,
 } from "react-icons/fi";
 
 function Disparador() {
@@ -175,17 +177,6 @@ function Disparador() {
     return () => clearInterval(interval);
   }, [fragRunning]);
 
-  const validateInput = (number) => {
-    const cleaned = number.replace(/\s/g, "").replace(/\+/g, "");
-    if (!cleaned) return "Ingresa un número de teléfono";
-    if (!/^\d+$/.test(cleaned)) return "Solo se permiten números";
-    if (cleaned.length < 10)
-      return `Número muy corto (${cleaned.length} dígitos). Mínimo 10.`;
-    if (cleaned.length > 13)
-      return `Número muy largo (${cleaned.length} dígitos). Máximo 13.`;
-    return "";
-  };
-
   const handleStart = async () => {
     setError("");
     const validationError = validateInput(phoneNumber);
@@ -200,7 +191,12 @@ function Disparador() {
       });
       if (res.data.success) {
         setIsRunning(true);
-        setStatus((prev) => ({ ...prev, destination: phoneNumber.trim() }));
+        setStatus((prev) => ({
+          ...prev,
+          destination: phoneNumber.trim(),
+          last_sent: res.data.last_sent || prev.last_sent,
+          last_message: res.data.last_message || prev.last_message,
+        }));
       } else setError(res.data.message);
     } catch (e) {
       setError("Error al iniciar: " + (e.response?.data?.message || e.message));
@@ -681,7 +677,7 @@ function Disparador() {
               >
                 <strong>Error:</strong> {error}
               </div>
-            )}
+            )            }
 
             <div
               className="m-form-actions"
@@ -1674,28 +1670,233 @@ function Disparador() {
       </div>
 
       {/* ========== REPORTES AUTOMÁTICOS ========== */}
-      <div className="card">
-        <div className="card-header">
-          <h2>📊 Reportes Automáticos</h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        {/* Izquierda: Información */}
+        <div className="m-table-card">
           <div
-            className={`status-badge ${reportsRunning ? "active" : "inactive"}`}
+            style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
           >
-            {reportsRunning ? "En ejecucion" : "Detenido"}
+            <FiCalendar size={18} style={{ color: "#8b5cf6" }} />
+            <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
+              Reportes Automáticos
+            </h3>
+          </div>
+          <div style={{ padding: "20px" }}>
+            <p
+              style={{
+                margin: "0 0 12px 0",
+                color: "#475569",
+                fontSize: "14px",
+              }}
+            >
+              Programa el envío automático de reportes bibliotecarios por
+              WhatsApp según la periodicidad que configures. El sistema enviará
+              un menú interactivo al número destino en los horarios
+              programados.
+            </p>
+            <ul
+              style={{
+                margin: "0 0 16px 0",
+                paddingLeft: "20px",
+                color: "#64748b",
+                fontSize: "13px",
+              }}
+            >
+              <li style={{ marginBottom: "4px" }}>
+                Reporte diario a la hora configurada
+              </li>
+              <li style={{ marginBottom: "4px" }}>
+                Reporte semanal el día y hora configurados
+              </li>
+              <li style={{ marginBottom: "4px" }}>
+                Reporte mensual el día y hora configurados
+              </li>
+              <li style={{ marginBottom: "4px" }}>
+                Envío automático por WhatsApp mediante Evolution API
+              </li>
+              <li style={{ marginBottom: "4px" }}>
+                Zona horaria America/Lima
+              </li>
+            </ul>
+
+            <div
+              style={{
+                background: "#f8fafc",
+                borderRadius: "8px",
+                padding: "14px",
+                marginBottom: "14px",
+              }}
+            >
+              <strong
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  marginBottom: "8px",
+                  color: "#1e293b",
+                  fontSize: "13px",
+                }}
+              >
+                <FiMessageSquare size={14} style={{ color: "#8b5cf6" }} />
+                Reportes Interactivos
+              </strong>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#64748b",
+                  fontSize: "12px",
+                  lineHeight: "1.5",
+                }}
+              >
+                También puedes solicitar reportes bajo demanda respondiendo al
+                menú de WhatsApp. El sistema genera y envía el PDF en tiempo
+                real.
+              </p>
+            </div>
+
+            <div
+              style={{
+                background: "#f8fafc",
+                borderRadius: "8px",
+                padding: "14px",
+              }}
+            >
+              <strong
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  marginBottom: "8px",
+                  color: "#1e293b",
+                  fontSize: "13px",
+                }}
+              >
+                <FiList size={14} style={{ color: "#8b5cf6" }} />
+                Reportes Disponibles
+              </strong>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "6px",
+                }}
+              >
+                {[
+                  { num: "1", icon: "📊", name: "Estadísticas" },
+                  { num: "2", icon: "📚", name: "Libros Prestados" },
+                  { num: "3", icon: "💰", name: "Multas" },
+                  { num: "4", icon: "⏰", name: "Préstamos Vencidos" },
+                  { num: "5", icon: "📕", name: "Libros Dañados" },
+                ].map((item) => (
+                  <div
+                    key={item.num}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      color: "#64748b",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "18px",
+                        height: "18px",
+                        background: "#e0e7ff",
+                        color: "#4338ca",
+                        borderRadius: "4px",
+                        fontSize: "10px",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {item.num}
+                    </span>
+                    <span>
+                      {item.icon} {item.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="card-body">
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Destino:</label>
+        {/* Derecha: Configuración */}
+        <div className="m-table-card">
+          <div
+            style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "10px" }}
+            >
+              <FiSettings size={18} style={{ color: "#8b5cf6" }} />
+              <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
+                Configuración de Reportes
+              </h3>
+            </div>
+            <span
+              className={`m-badge ${reportsRunning ? "m-badge-paid" : "m-badge-pending"}`}
+            >
               {reportsRunning ? (
-                <span className="value">{reportsPhone}</span>
+                <FiCheckCircle size={11} />
               ) : (
-                <>
+                <FiAlertCircle size={11} />
+              )}
+              {reportsRunning ? " En ejecución" : " Detenido"}
+            </span>
+          </div>
+          <div style={{ padding: "20px" }}>
+            {/* Destino */}
+            <div className="m-form-group" style={{ marginBottom: "16px" }}>
+              <label>
+                <FiPhone size={13} /> Número de Destino
+              </label>
+              {reportsRunning ? (
+                <span
+                  style={{
+                    display: "block",
+                    padding: "10px 14px",
+                    background: "#f1f5f9",
+                    borderRadius: "8px",
+                    color: "#475569",
+                    fontWeight: "500",
+                  }}
+                >
+                  {reportsPhone}
+                </span>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
                   <input
                     ref={reportsInputRef}
                     type="text"
-                    className={`phone-input ${reportsError ? "error" : ""}`}
                     value={reportsPhone}
                     onChange={handleReportsInputChange}
                     onBlur={handleReportsInputBlur}
@@ -1703,417 +1904,553 @@ function Disparador() {
                     placeholder="519XXXXXXXX"
                     disabled={reportsRunning}
                     autoComplete="off"
+                    style={{
+                      padding: "10px 14px",
+                      fontSize: "14px",
+                      borderRadius: "8px",
+                      border: reportsError
+                        ? "1px solid #ef4444"
+                        : "1px solid #e2e8f0",
+                      outline: "none",
+                    }}
                   />
-                  <span className="input-hint">
+                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
                     Ej: 51952310138 (11 dígitos)
                   </span>
-                </>
+                </div>
               )}
             </div>
-            <div className="info-item">
-              <label>Proximo diario:</label>
-              <span className="value">
-                {reportsStatus.daily?.next_run
-                  ? new Date(reportsStatus.daily.next_run).toLocaleString()
-                  : "--"}
-              </span>
-            </div>
-            <div className="info-item">
-              <label>Proximo semanal:</label>
-              <span className="value">
-                {reportsStatus.weekly?.next_run
-                  ? new Date(reportsStatus.weekly.next_run).toLocaleString()
-                  : "--"}
-              </span>
-            </div>
-            <div className="info-item">
-              <label>Proximo mensual:</label>
-              <span className="value">
-                {reportsStatus.monthly?.next_run
-                  ? new Date(reportsStatus.monthly.next_run).toLocaleString()
-                  : "--"}
-              </span>
-            </div>
-          </div>
 
-          {/* CONFIGURACIÓN DE HORARIOS */}
-          <div className="schedules-config">
-            <h4>⚙️ Configuración de Horarios</h4>
-
-            {/* DIARIO */}
-            <div className="schedule-config-item">
-              <div
+            {/* Configuración de horarios */}
+            <div
+              style={{
+                background: "#f8fafc",
+                borderRadius: "8px",
+                padding: "16px",
+                marginBottom: "16px",
+              }}
+            >
+              <h4
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginBottom: "8px",
+                  margin: "0 0 12px 0",
+                  fontSize: "14px",
+                  color: "#1e293b",
                 }}
               >
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    id="daily-enabled"
-                    checked={dailyEnabled}
-                    onChange={(e) => {
-                      if (reportsRunning) {
-                        handleToggleReport("daily", e.target.checked);
-                      } else {
-                        setDailyEnabled(e.target.checked);
-                      }
-                    }}
-                  />
-                  <span className="slider"></span>
-                </label>
-                <label
-                  htmlFor="daily-enabled"
-                  style={{ fontWeight: "bold", margin: 0, cursor: "pointer" }}
-                >
-                  📅 Reporte Diario
-                </label>
-              </div>
-              <div
-                className="time-inputs"
-                style={{ opacity: dailyEnabled ? 1 : 0.5 }}
-              >
-                <div className="time-input-group">
-                  <label>Hora:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={dailyHour}
-                    onChange={(e) =>
-                      setDailyHour(parseInt(e.target.value) || 0)
-                    }
-                    disabled={reportsRunning || !dailyEnabled}
-                  />
-                </div>
-                <div className="time-input-group">
-                  <label>Minuto:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={dailyMinute}
-                    onChange={(e) =>
-                      setDailyMinute(parseInt(e.target.value) || 0)
-                    }
-                    disabled={reportsRunning || !dailyEnabled}
-                  />
-                </div>
-                <div className="time-preview">
-                  {String(dailyHour).padStart(2, "0")}:
-                  {String(dailyMinute).padStart(2, "0")}
-                </div>
-              </div>
-            </div>
+                ⚙️ Configuración de Horarios
+              </h4>
 
-            {/* SEMANAL */}
-            <div className="schedule-config-item">
+              {/* DIARIO */}
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginBottom: "8px",
+                  padding: "12px",
+                  background: "white",
+                  borderRadius: "8px",
+                  marginBottom: "10px",
+                  opacity: dailyEnabled ? 1 : 0.6,
                 }}
               >
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    id="weekly-enabled"
-                    checked={weeklyEnabled}
-                    onChange={(e) => {
-                      if (reportsRunning) {
-                        handleToggleReport("weekly", e.target.checked);
-                      } else {
-                        setWeeklyEnabled(e.target.checked);
-                      }
-                    }}
-                  />
-                  <span className="slider"></span>
-                </label>
-                <label
-                  htmlFor="weekly-enabled"
-                  style={{ fontWeight: "bold", margin: 0, cursor: "pointer" }}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                  }}
                 >
-                  📆 Reporte Semanal
-                </label>
-              </div>
-              <div
-                className="time-inputs"
-                style={{ opacity: weeklyEnabled ? 1 : 0.5 }}
-              >
-                <div className="time-input-group">
-                  <label>Día:</label>
-                  <select
-                    value={weeklyDay}
-                    onChange={(e) => setWeeklyDay(e.target.value)}
-                    disabled={reportsRunning || !weeklyEnabled}
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      id="daily-enabled"
+                      checked={dailyEnabled}
+                      onChange={(e) => {
+                        if (reportsRunning) {
+                          handleToggleReport("daily", e.target.checked);
+                        } else {
+                          setDailyEnabled(e.target.checked);
+                        }
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <label
+                    htmlFor="daily-enabled"
+                    style={{
+                      fontWeight: "600",
+                      margin: 0,
+                      cursor: "pointer",
+                      fontSize: "14px",
+                    }}
                   >
-                    <option value="MON">Lunes</option>
-                    <option value="TUE">Martes</option>
-                    <option value="WED">Miércoles</option>
-                    <option value="THU">Jueves</option>
-                    <option value="FRI">Viernes</option>
-                    <option value="SAT">Sábado</option>
-                    <option value="SUN">Domingo</option>
-                  </select>
+                    📅 Reporte Diario
+                  </label>
                 </div>
-                <div className="time-input-group">
-                  <label>Hora:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={weeklyHour}
-                    onChange={(e) =>
-                      setWeeklyHour(parseInt(e.target.value) || 0)
-                    }
-                    disabled={reportsRunning || !weeklyEnabled}
-                  />
-                </div>
-                <div className="time-input-group">
-                  <label>Minuto:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={weeklyMinute}
-                    onChange={(e) =>
-                      setWeeklyMinute(parseInt(e.target.value) || 0)
-                    }
-                    disabled={reportsRunning || !weeklyEnabled}
-                  />
-                </div>
-                <div className="time-preview">
-                  {weeklyDay} {String(weeklyHour).padStart(2, "0")}:
-                  {String(weeklyMinute).padStart(2, "0")}
+                <div
+                  className="time-inputs"
+                  style={{ display: "flex", gap: "10px", alignItems: "end" }}
+                >
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Hora
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={dailyHour}
+                      onChange={(e) =>
+                        setDailyHour(parseInt(e.target.value) || 0)
+                      }
+                      disabled={reportsRunning || !dailyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Minuto
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={dailyMinute}
+                      onChange={(e) =>
+                        setDailyMinute(parseInt(e.target.value) || 0)
+                      }
+                      disabled={reportsRunning || !dailyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      background: "#e0e7ff",
+                      color: "#4338ca",
+                      borderRadius: "6px",
+                      fontWeight: "600",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {String(dailyHour).padStart(2, "0")}:
+                    {String(dailyMinute).padStart(2, "0")}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* MENSUAL */}
-            <div className="schedule-config-item">
+              {/* SEMANAL */}
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginBottom: "8px",
+                  padding: "12px",
+                  background: "white",
+                  borderRadius: "8px",
+                  marginBottom: "10px",
+                  opacity: weeklyEnabled ? 1 : 0.6,
                 }}
               >
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    id="monthly-enabled"
-                    checked={monthlyEnabled}
-                    onChange={(e) => {
-                      if (reportsRunning) {
-                        handleToggleReport("monthly", e.target.checked);
-                      } else {
-                        setMonthlyEnabled(e.target.checked);
-                      }
-                    }}
-                  />
-                  <span className="slider"></span>
-                </label>
-                <label
-                  htmlFor="monthly-enabled"
-                  style={{ fontWeight: "bold", margin: 0, cursor: "pointer" }}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                  }}
                 >
-                  🗓️ Reporte Mensual
-                </label>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      id="weekly-enabled"
+                      checked={weeklyEnabled}
+                      onChange={(e) => {
+                        if (reportsRunning) {
+                          handleToggleReport("weekly", e.target.checked);
+                        } else {
+                          setWeeklyEnabled(e.target.checked);
+                        }
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <label
+                    htmlFor="weekly-enabled"
+                    style={{
+                      fontWeight: "600",
+                      margin: 0,
+                      cursor: "pointer",
+                      fontSize: "14px",
+                    }}
+                  >
+                    📆 Reporte Semanal
+                  </label>
+                </div>
+                <div
+                  className="time-inputs"
+                  style={{ display: "flex", gap: "10px", alignItems: "end" }}
+                >
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Día
+                    </label>
+                    <select
+                      value={weeklyDay}
+                      onChange={(e) => setWeeklyDay(e.target.value)}
+                      disabled={reportsRunning || !weeklyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                      }}
+                    >
+                      <option value="MON">Lunes</option>
+                      <option value="TUE">Martes</option>
+                      <option value="WED">Miércoles</option>
+                      <option value="THU">Jueves</option>
+                      <option value="FRI">Viernes</option>
+                      <option value="SAT">Sábado</option>
+                      <option value="SUN">Domingo</option>
+                    </select>
+                  </div>
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Hora
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={weeklyHour}
+                      onChange={(e) =>
+                        setWeeklyHour(parseInt(e.target.value) || 0)
+                      }
+                      disabled={reportsRunning || !weeklyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Minuto
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={weeklyMinute}
+                      onChange={(e) =>
+                        setWeeklyMinute(parseInt(e.target.value) || 0)
+                      }
+                      disabled={reportsRunning || !weeklyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      background: "#e0e7ff",
+                      color: "#4338ca",
+                      borderRadius: "6px",
+                      fontWeight: "600",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {weeklyDay} {String(weeklyHour).padStart(2, "0")}:
+                    {String(weeklyMinute).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+
+              {/* MENSUAL */}
+              <div
+                style={{
+                  padding: "12px",
+                  background: "white",
+                  borderRadius: "8px",
+                  opacity: monthlyEnabled ? 1 : 0.6,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      id="monthly-enabled"
+                      checked={monthlyEnabled}
+                      onChange={(e) => {
+                        if (reportsRunning) {
+                          handleToggleReport("monthly", e.target.checked);
+                        } else {
+                          setMonthlyEnabled(e.target.checked);
+                        }
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <label
+                    htmlFor="monthly-enabled"
+                    style={{
+                      fontWeight: "600",
+                      margin: 0,
+                      cursor: "pointer",
+                      fontSize: "14px",
+                    }}
+                  >
+                    🗓️ Reporte Mensual
+                  </label>
+                </div>
+                <div
+                  className="time-inputs"
+                  style={{ display: "flex", gap: "10px", alignItems: "end" }}
+                >
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Día
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={monthlyDay}
+                      onChange={(e) =>
+                        setMonthlyDay(parseInt(e.target.value) || 1)
+                      }
+                      disabled={reportsRunning || !monthlyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Hora
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={monthlyHour}
+                      onChange={(e) =>
+                        setMonthlyHour(parseInt(e.target.value) || 0)
+                      }
+                      disabled={reportsRunning || !monthlyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div className="time-input-group">
+                    <label style={{ fontSize: "12px", color: "#64748b" }}>
+                      Minuto
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={monthlyMinute}
+                      onChange={(e) =>
+                        setMonthlyMinute(parseInt(e.target.value) || 0)
+                      }
+                      disabled={reportsRunning || !monthlyEnabled}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        width: "60px",
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      background: "#e0e7ff",
+                      color: "#4338ca",
+                      borderRadius: "6px",
+                      fontWeight: "600",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Día {monthlyDay} {String(monthlyHour).padStart(2, "0")}:
+                    {String(monthlyMinute).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Resumen */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: "10px",
+                marginBottom: "16px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "12px",
+                  background: "#eff6ff",
+                  borderRadius: "8px",
+                  border: "1px solid #dbeafe",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#1d4ed8",
+                    fontWeight: "600",
+                    marginBottom: "4px",
+                  }}
+                >
+                  📅 Diario
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  {reportsStatus.daily?.time || "--"}
+                </div>
+                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                  {reportsStatus.daily_enabled ? "Habilitado" : "Deshabilitado"}
+                </div>
               </div>
               <div
-                className="time-inputs"
-                style={{ opacity: monthlyEnabled ? 1 : 0.5 }}
+                style={{
+                  padding: "12px",
+                  background: "#eff6ff",
+                  borderRadius: "8px",
+                  border: "1px solid #dbeafe",
+                }}
               >
-                <div className="time-input-group">
-                  <label>Día del mes:</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={monthlyDay}
-                    onChange={(e) =>
-                      setMonthlyDay(parseInt(e.target.value) || 1)
-                    }
-                    disabled={reportsRunning || !monthlyEnabled}
-                  />
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#1d4ed8",
+                    fontWeight: "600",
+                    marginBottom: "4px",
+                  }}
+                >
+                  📆 Semanal
                 </div>
-                <div className="time-input-group">
-                  <label>Hora:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={monthlyHour}
-                    onChange={(e) =>
-                      setMonthlyHour(parseInt(e.target.value) || 0)
-                    }
-                    disabled={reportsRunning || !monthlyEnabled}
-                  />
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  {reportsStatus.weekly?.day || "--"}{" "}
+                  {reportsStatus.weekly?.time || ""}
                 </div>
-                <div className="time-input-group">
-                  <label>Minuto:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={monthlyMinute}
-                    onChange={(e) =>
-                      setMonthlyMinute(parseInt(e.target.value) || 0)
-                    }
-                    disabled={reportsRunning || !monthlyEnabled}
-                  />
+                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                  {reportsStatus.weekly_enabled
+                    ? "Habilitado"
+                    : "Deshabilitado"}
                 </div>
-                <div className="time-preview">
-                  Día {monthlyDay} {String(monthlyHour).padStart(2, "0")}:
-                  {String(monthlyMinute).padStart(2, "0")}
+              </div>
+              <div
+                style={{
+                  padding: "12px",
+                  background: "#eff6ff",
+                  borderRadius: "8px",
+                  border: "1px solid #dbeafe",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#1d4ed8",
+                    fontWeight: "600",
+                    marginBottom: "4px",
+                  }}
+                >
+                  🗓️ Mensual
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  Día {reportsStatus.monthly?.day || "--"}{" "}
+                  {reportsStatus.monthly?.time || ""}
+                </div>
+                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                  {reportsStatus.monthly_enabled
+                    ? "Habilitado"
+                    : "Deshabilitado"}
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="schedule-info">
-            <div className="schedule-box">
-              <strong>
-                📅 Reportes Diarios{" "}
-                <span
-                  style={{
-                    fontSize: "0.8em",
-                    color: reportsStatus.daily_enabled ? "green" : "red",
-                  }}
-                >
-                  [
-                  {reportsStatus.daily_enabled ? "HABILITADO" : "DESHABILITADO"}
-                  ]
-                </span>
-              </strong>
-              <p>
-                Hora: {reportsStatus.daily?.time || "--"} (
-                {reportsStatus.timezone})
-              </p>
-              <p>
-                Tipos:{" "}
-                {Array.isArray(reportsStatus.daily?.types)
-                  ? reportsStatus.daily.types.join(", ")
-                  : "--"}
-              </p>
-            </div>
-            <div className="schedule-box">
-              <strong>
-                📆 Reportes Semanales{" "}
-                <span
-                  style={{
-                    fontSize: "0.8em",
-                    color: reportsStatus.weekly_enabled ? "green" : "red",
-                  }}
-                >
-                  [
-                  {reportsStatus.weekly_enabled
-                    ? "HABILITADO"
-                    : "DESHABILITADO"}
-                  ]
-                </span>
-              </strong>
-              <p>
-                Día: {reportsStatus.weekly?.day || "--"} a las{" "}
-                {reportsStatus.weekly?.time || "--"}
-              </p>
-              <p>
-                Tipos:{" "}
-                {Array.isArray(reportsStatus.weekly?.types)
-                  ? reportsStatus.weekly.types.join(", ")
-                  : "--"}
-              </p>
-            </div>
-            <div className="schedule-box">
-              <strong>
-                🗓️ Reportes Mensuales{" "}
-                <span
-                  style={{
-                    fontSize: "0.8em",
-                    color: reportsStatus.monthly_enabled ? "green" : "red",
-                  }}
-                >
-                  [
-                  {reportsStatus.monthly_enabled
-                    ? "HABILITADO"
-                    : "DESHABILITADO"}
-                  ]
-                </span>
-              </strong>
-              <p>
-                Día: {reportsStatus.monthly?.day || "--"} a las{" "}
-                {reportsStatus.monthly?.time || "--"}
-              </p>
-              <p>
-                Tipos:{" "}
-                {Array.isArray(reportsStatus.monthly?.types)
-                  ? reportsStatus.monthly.types.join(", ")
-                  : "--"}
-              </p>
-            </div>
-          </div>
-
-          {reportsError && (
-            <div className="error-message">
-              <strong>Error:</strong> {reportsError}
-            </div>
-          )}
-
-          <div className="action-area">
-            {reportsRunning ? (
-              <button
-                className="btn btn-danger"
-                onClick={handleReportsStop}
-                disabled={reportsLoading}
+            {reportsError && (
+              <div
+                style={{
+                  padding: "12px 16px",
+                  background: "#fef2f2",
+                  border: "1px solid #fee2e2",
+                  borderRadius: "8px",
+                  color: "#dc2626",
+                  marginBottom: "16px",
+                }}
               >
-                {reportsLoading ? "Deteniendo..." : "Detener"}
-              </button>
-            ) : (
-              <button
-                className="btn btn-primary"
-                onClick={handleReportsStart}
-                disabled={reportsLoading}
-              >
-                {reportsLoading ? "Iniciando..." : "Iniciar Reportes"}
-              </button>
+                <strong>Error:</strong> {reportsError}
+              </div>
             )}
-          </div>
-        </div>
-      </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h3>Reportes Interactivos</h3>
-        </div>
-        <div className="card-body">
-          <p className="description">
-            Después de activar los reportes, los usuarios pueden enviar mensajes
-            por WhatsApp para solicitar reportes bajo demanda de forma
-            interactiva.
-          </p>
-          <div className="interactive-info">
-            <strong>🎯 Flujo interactivo:</strong>
-            <ol>
-              <li>Usuario envía cualquier mensaje a la conversación</li>
-              <li>Sistema muestra menú de tipos de reportes disponibles</li>
-              <li>Usuario selecciona (1-5) el reporte que desea</li>
-              <li>Sistema genera y envía el reporte en tiempo real</li>
-              <li>Se ofrece opción de generar otro reporte o cancelar</li>
-            </ol>
+            <div
+              className="m-form-actions"
+              style={{ justifyContent: "flex-start" }}
+            >
+              {reportsRunning ? (
+                <button
+                  className="m-btn-danger"
+                  onClick={handleReportsStop}
+                  disabled={reportsLoading}
+                >
+                  {reportsLoading ? (
+                    <FiRefreshCw
+                      size={14}
+                      style={{ animation: "spin 1s linear infinite" }}
+                    />
+                  ) : (
+                    <FiSquare size={14} />
+                  )}
+                  {reportsLoading ? " Deteniendo..." : " Detener"}
+                </button>
+              ) : (
+                <button
+                  className="m-btn-primary"
+                  onClick={handleReportsStart}
+                  disabled={reportsLoading}
+                >
+                  {reportsLoading ? (
+                    <FiRefreshCw
+                      size={14}
+                      style={{ animation: "spin 1s linear infinite" }}
+                    />
+                  ) : (
+                    <FiPlay size={14} />
+                  )}
+                  {reportsLoading ? " Iniciando..." : " Iniciar Reportes"}
+                </button>
+              )}
+            </div>
           </div>
-          <ul className="feature-list">
-            <li>✅ Estadísticas Generales</li>
-            <li>✅ Libros Más Prestados</li>
-            <li>✅ Multas Pendientes</li>
-            <li>✅ Préstamos Vencidos</li>
-            <li>✅ Libros Dañados (últimos 30 días)</li>
-          </ul>
         </div>
       </div>
     </div>

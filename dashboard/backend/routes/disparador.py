@@ -29,7 +29,9 @@ from services.fill_factor_service import (
     verificar_fragmentacion,
     enviar_alerta_fragmentacion,
     enviar_ok_fragmentacion,
+)
 from models.user_conversation import UserConversation
+
 from services.interactive_reports_service import (
     generar_menu_principal,
     procesar_mensaje_usuario,
@@ -216,6 +218,15 @@ def execute_send():
         print(f"[ERROR] {last_message}")
 
 
+def scheduled_execute_send():
+    """Wrapper para ejecutar execute_send dentro del app_context de Flask."""
+    if _flask_app:
+        with _flask_app.app_context():
+            execute_send()
+    else:
+        execute_send()
+
+
 @bp.route('/api/health', methods=['GET'])
 def health():
     return jsonify({
@@ -265,17 +276,24 @@ def start_scheduler():
     print(f"[{datetime.now()}] Número actualizado: {current_destination}")
 
     scheduler.add_job(
-        execute_send,
+        scheduled_execute_send,
         'interval',
         minutes=INTERVAL_MINUTES,
         id='whatsapp_disparo',
         replace_existing=True
     )
     is_running = True
+
+    # Enviar el primer mensaje de inmediato al presionar Iniciar
+    print(f"[{datetime.now()}] Enviando mensaje inicial inmediato a {current_destination}...")
+    execute_send()
+
     return jsonify({
         'success': True,
         'message': f'Disparador iniciado para el número {current_destination}',
-        'destination': current_destination
+        'destination': current_destination,
+        'last_sent': last_sent,
+        'last_message': last_message
     })
 
 
@@ -512,21 +530,54 @@ def _extract_text_from_webhook_message(message):
         return ''
 
     # Texto directo en la conversación
-    if 'conversation' in message:
-        return message.get('conversation', '')
+    if message.get('conversation'):
+        return message.get('conversation', '').strip()
 
     # Mensaje extendido con texto opcional
     extended = message.get('extendedTextMessage') or {}
     if isinstance(extended, dict):
         text = extended.get('text', '') or extended.get('contextInfo', {}).get('quotedMessage', {}).get('conversation', '')
         if text:
-            return text
+            return text.strip()
 
-    # Selección de lista o botones con texto mostrado
-    if 'selectedDisplayText' in message:
-        return message.get('selectedDisplayText', '')
-    if 'selectedRowId' in message:
-        return message.get('selectedRowId', '')
+    # Mensajes con caption (imagen, video, documento)
+    for media_key in ['imageMessage', 'videoMessage']:
+        media = message.get(media_key) or {}
+        if isinstance(media, dict) and media.get('caption'):
+            return media['caption'].strip()
+
+    document_caption = (
+        message.get('documentWithCaptionMessage', {})
+        .get('message', {})
+        .get('documentMessage', {})
+        .get('caption', '')
+    )
+    if document_caption:
+        return document_caption.strip()
+
+    # Respuesta de botones
+    buttons_response = message.get('buttonsResponseMessage') or {}
+    if isinstance(buttons_response, dict):
+        text = buttons_response.get('selectedButtonId') or buttons_response.get('selectedDisplayText')
+        if text:
+            return text.strip()
+
+    # Respuesta de lista
+    list_response = message.get('listResponseMessage') or {}
+    if isinstance(list_response, dict):
+        text = (
+            list_response.get('title') or
+            list_response.get('singleSelectReply', {}).get('selectedRowId')
+        )
+        if text:
+            return text.strip()
+
+    # Template button reply
+    template_reply = message.get('templateButtonReplyMessage') or {}
+    if isinstance(template_reply, dict):
+        text = template_reply.get('selectedId') or template_reply.get('selectedDisplayText')
+        if text:
+            return text.strip()
 
     # Fallback: buscar cualquier campo string dentro del mensaje
     for key, value in message.items():
@@ -546,6 +597,10 @@ def backup_webhook():
     """
     payload = request.get_json() or {}
 
+    # Log completo del payload para diagnóstico
+    import json
+    print(f"[DEBUG Webhook] Payload completo:\n{json.dumps(payload, indent=2, default=str)}")
+
     # Extraer datos del payload de Evolution API v2
     data = payload.get('data', {})
     key = data.get('key', {})
@@ -555,11 +610,19 @@ def backup_webhook():
     from_me = key.get('fromMe', True)
     text = _extract_text_from_webhook_message(message)
 
-    # Limpiar número (quitar @s.whatsapp.net)
+    # Limpiar número: quitar @s.whatsapp.net, sufijos :1/:2 de dispositivos,
+    # y dejar solo dígitos.
     numero_remoto = remote_jid.split('@')[0] if remote_jid else ''
+    numero_remoto = numero_remoto.split(':')[0]
+    numero_remoto = ''.join(c for c in numero_remoto if c.isdigit())
+
+    print(f"[DEBUG Webhook] Mensaje entrante - remoteJid: {remote_jid}, "
+          f"numero limpio: {numero_remoto}, fromMe: {from_me}, texto: '{text}'")
 
     # Ignorar mensajes: propios, sin texto, de grupos (@g.us) o sin número
     if from_me or not text or not numero_remoto or '@g.us' in remote_jid:
+        print(f"[DEBUG Webhook] Mensaje ignorado - fromMe:{from_me}, texto:'{text}', "
+              f"numero:{numero_remoto}, esGrupo:{'@g.us' in remote_jid}")
         return jsonify({'processed': False, 'reason': 'Ignored'}), 200
 
     log_auditoria(
@@ -574,39 +637,67 @@ def backup_webhook():
     texto_upper = text.strip().upper()
 
     # Ejecutar procesamiento dentro de app_context para que
-    # log_auditoria y db.session funcionen correctamente
-    if texto_upper.startswith('FACTOR LLENADO'):
-        # Comando de fill factor: FACTOR LLENADO <porcentaje>
-        if _flask_app:
-            with _flask_app.app_context():
-                resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
-        else:
-            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-            resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
-    else:
-        # Comando de backup: RESUELVE BACKUP (u otros futuros)
-        if _flask_app:
-            with _flask_app.app_context():
-                resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
-        else:
-            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-            resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+    # log_auditoria y db.session funcionen correctamente.
+    # Solo se procesa UNA VEZ para evitar doble ejecución de comandos.
+    def _procesar():
+        if texto_upper.startswith('FACTOR LLENADO'):
+            return procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+
+        # Primero intentar comando de backup
+        resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+
+        # Si no fue un comando de backup, intentar reporte interactivo
+        if not resultado.get('processed', False):
+            resultado_reporte = procesar_mensaje_reporte(text, numero_remoto)
+            if resultado_reporte.get('processed'):
+                return resultado_reporte
+
+        return resultado
+
     if _flask_app:
         with _flask_app.app_context():
-            # Primero intentar procesar como comando de backup
-            resultado_backup = procesar_comando_backup(text, numero_remoto, backup_destination)
-            
-            # Si no fue un comando de backup, procesar como reporte interactivo
-            if not resultado_backup.get('processed', False):
-                resultado_reporte = procesar_mensaje_reporte(text, numero_remoto)
-                resultado = resultado_reporte if resultado_reporte.get('processed') else resultado_backup
-            else:
-                resultado = resultado_backup
+            resultado = _procesar()
     else:
-        resultado_backup = procesar_comando_backup(text, numero_remoto, backup_destination)
-        resultado = resultado_backup
+        print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+        resultado = _procesar()
 
+    print(f"[DEBUG Webhook] Resultado del procesamiento: {resultado}")
     return jsonify(resultado), 200
+
+
+@bp.route('/api/reports/simulate-incoming', methods=['POST'])
+def simulate_incoming_message():
+    """
+    Endpoint de prueba: simula un mensaje entrante de WhatsApp para probar
+    el flujo de reportes interactivos sin depender de Evolution API.
+    """
+    data = request.get_json() or {}
+    numero = str(data.get('number', '')).strip()
+    texto = str(data.get('text', '')).strip()
+
+    if not numero or not texto:
+        return jsonify({'success': False, 'message': 'Debes enviar number y text'}), 400
+
+    print(f"[DEBUG Simulate] Simulando mensaje de {numero}: '{texto}'")
+
+    def _procesar():
+        resultado_backup = procesar_comando_backup(texto, numero, backup_destination)
+        if resultado_backup.get('processed'):
+            return resultado_backup
+        return procesar_mensaje_reporte(texto, numero)
+
+    if _flask_app:
+        with _flask_app.app_context():
+            resultado = _procesar()
+    else:
+        resultado = _procesar()
+
+    return jsonify({
+        'success': True,
+        'number': numero,
+        'text': texto,
+        'result': resultado
+    }), 200
 
 
 # ===========================================================================
@@ -796,6 +887,9 @@ def test_fragmentation():
     return jsonify({
         'success': True,
         'result': resultado
+    })
+
+
 # REPORTES INTERACTIVOS POR WHATSAPP
 # ===========================================================================
 
@@ -804,32 +898,55 @@ def procesar_mensaje_reporte(texto_usuario, numero_usuario):
     Procesa un mensaje del usuario para reportes interactivos.
     Gestiona el flujo de conversación y generación de reportes.
     """
+    print(f"[DEBUG Reporte] Procesando mensaje de {numero_usuario}: '{texto_usuario}'")
+
     # Obtener la conversación
     conv = UserConversation.get_or_create(numero_usuario)
-    
-    # Si la conversación está inactiva y el usuario no envía un comando inicial, ignorar
-    # Para iniciar una conversación, el usuario debe ser contactado primero por el sistema o enviar un comando explícito
-    # Por ahora, solo procesamos si la conversación no está idle (ya fue iniciada)
-    # o el mensaje es un comando explícito para iniciar
-    if conv.state == 'idle' and texto_usuario.strip().lower() not in ['menu', 'reportes', 'iniciar', 'start']:
-        return {'processed': False, 'reason': 'Conversación inactiva'}
-        
+    texto_limpio = texto_usuario.strip().lower()
+    print(f"[DEBUG Reporte] Estado actual de conversación: {conv.state}")
+
+    # Si la conversación está inactiva y el usuario envía un número de reporte (1-5),
+    # activamos el menú y procesamos la selección en el mismo paso.
+    comandos_inicio = ['menu', 'reportes', 'iniciar', 'start']
+    if conv.state == 'idle' and texto_limpio not in comandos_inicio:
+        from services.interactive_reports_service import REPORT_TYPES
+        if texto_limpio in REPORT_TYPES:
+            print(f"[DEBUG Reporte] Usuario inactivo envió opción válida {texto_limpio}. "
+                  "Activando menú y procesando selección.")
+            conv.update_state('menu')
+        else:
+            print(f"[DEBUG Reporte] Conversación inactiva. Mensaje '{texto_limpio}' no es "
+                  "comando válido. Se enviará menú.")
+            # Enviar menú para que el usuario pueda iniciar la conversación
+            from services.interactive_reports_service import generar_menu_principal
+            send_message(generar_menu_principal(), numero_usuario)
+            return {
+                'processed': True,
+                'user': numero_usuario,
+                'estado': 'menu',
+                'tipo_reporte': None,
+                'reason': 'Conversación inactiva, menú enviado'
+            }
+
     # Procesar el mensaje y obtener la respuesta del estado
     resultado_estado = procesar_mensaje_usuario(numero_usuario, texto_usuario)
-    
+    print(f"[DEBUG Reporte] Resultado de procesar_mensaje_usuario: {resultado_estado}")
+
     # Enviar respuesta inicial/menú
     if resultado_estado['respuesta']:
         send_result = send_message(resultado_estado['respuesta'], numero_usuario)
         if not send_result['success']:
             print(f"[ERROR] Fallo al enviar respuesta de reporte: {send_result}")
-    
+
     # Si el usuario seleccionó un reporte, generarlo y enviarlo
     if resultado_estado['estado'] == 'generating_report' and resultado_estado['tipo_reporte']:
         tipo_reporte = resultado_estado['tipo_reporte']
         print(f"[DEBUG] Generando reporte: {tipo_reporte} para {numero_usuario}")
-        
+
         resultado_reporte = generar_y_enviar_reporte(numero_usuario, tipo_reporte)
-        
+        print(f"[DEBUG] Resultado de generar_y_enviar_reporte: exito={resultado_reporte.get('exito')}, "
+              f"pdf_path={resultado_reporte.get('pdf_path')}")
+
         if resultado_reporte['exito']:
             if resultado_reporte.get('pdf_path'):
                 send_result = send_document(
@@ -847,7 +964,7 @@ def procesar_mensaje_reporte(texto_usuario, numero_usuario):
                     print(f"[ERROR] No se pudo eliminar el PDF: {e}")
             else:
                 send_result = send_message(resultado_reporte['mensaje'], numero_usuario)
-            
+
             if send_result['success']:
                 print(f"[OK] Reporte {tipo_reporte} enviado a {numero_usuario}")
                 actualizar_estado_reporte_enviado(numero_usuario)
@@ -860,7 +977,7 @@ def procesar_mensaje_reporte(texto_usuario, numero_usuario):
         else:
             print(f"[ERROR] Fallo en generación de reporte: {resultado_reporte}")
             send_message(resultado_reporte['mensaje'], numero_usuario)
-    
+
     return {
         'processed': True,
         'user': numero_usuario,
