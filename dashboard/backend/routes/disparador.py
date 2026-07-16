@@ -39,6 +39,9 @@ from services.interactive_reports_service import (
     actualizar_estado_reporte_enviado,
     obtener_estado_conversacion,
     REPORT_TYPES,
+from services.login_security_service import (
+    check_failed_attempts,
+    procesar_comando_login,
 )
 from config.settings import Config
 
@@ -80,6 +83,15 @@ frag_last_check = None
 frag_last_result = None
 frag_umbral = int(os.getenv('FRAG_UMBRAL', '30'))
 FRAG_INTERVAL_MINUTES = int(os.getenv('FRAG_INTERVAL_MINUTES', '60'))
+
+# ---------------------------------------------------------------------------
+# Estado global del monitoreo de SEGURIDAD DE LOGIN
+# ---------------------------------------------------------------------------
+login_security_is_running = False
+login_security_last_check = None
+login_security_last_alert = None  # Nueva variable para la última alerta
+login_security_destination = os.getenv('WHATSAPP_DESTINATION', '5190065850')
+LOGIN_CHECK_INTERVAL_MINUTES = int(os.getenv('LOGIN_CHECK_INTERVAL_MINUTES', '5'))
 
 
 def set_flask_app(app):
@@ -594,6 +606,7 @@ def backup_webhook():
     Procesa los siguientes comandos:
     - RESUELVE BACKUP: ejecuta un backup manual de Bibliouni.
     - FACTOR LLENADO <N>: reconstruye índices con el fill factor indicado.
+    - BLOQUEA <username>: deshabilita un login de SQL Server.
     """
     payload = request.get_json() or {}
 
@@ -639,17 +652,82 @@ def backup_webhook():
     # Ejecutar procesamiento dentro de app_context para que
     # log_auditoria y db.session funcionen correctamente.
     # Solo se procesa UNA VEZ para evitar doble ejecución de comandos.
+    
+    
+    ###Aqui empezó el conflicto (de mi parte)
+    # def _procesar():
+    #     if texto_upper.startswith('FACTOR LLENADO'):
+    #         return procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+    # # log_auditoria y db.session funcionen correctamente
+    
+    # ###Aqui empezó el conflicto (de la parte de anthony)
+    # if texto_upper.startswith('FACTOR LLENADO'):
+    #     # Comando de fill factor: FACTOR LLENADO <porcentaje>
+    #     if _flask_app:
+    #         with _flask_app.app_context():
+    #             resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+    #     else:
+    #         print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+    #         resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+    # elif texto_upper.startswith('BLOQUEA'):
+    #     # Comando de seguridad de login: BLOQUEA <username>
+    #     if _flask_app:
+    #         with _flask_app.app_context():
+    #             resultado = procesar_comando_login(text, numero_remoto, login_security_destination)
+    #     else:
+    #         print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+    #         resultado = procesar_comando_login(text, numero_remoto, login_security_destination)
+    # else:
+    #     # Comando de backup: RESUELVE BACKUP (u otros futuros)
+    #     if _flask_app:
+    #         with _flask_app.app_context():
+    #             resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+    #     else:
+    #         print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+    #         resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+
+    #     # Primero intentar comando de backup
+    #     resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+
+    #     # Si no fue un comando de backup, intentar reporte interactivo
+    #     if not resultado.get('processed', False):
+    #         resultado_reporte = procesar_mensaje_reporte(text, numero_remoto)
+    #         if resultado_reporte.get('processed'):
+    #             return resultado_reporte
+
+    #     return resultado
+###
     def _procesar():
+        
         if texto_upper.startswith('FACTOR LLENADO'):
-            return procesar_comando_fill_factor(text, numero_remoto, backup_destination)
+            return procesar_comando_fill_factor(
+                text,
+                numero_remoto,
+                backup_destination
+            )
+
+        elif texto_upper.startswith('BLOQUEA'):
+            return procesar_comando_login(
+                text,
+                numero_remoto,
+                login_security_destination
+            )
 
         # Primero intentar comando de backup
-        resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        resultado = procesar_comando_backup(
+            text,
+            numero_remoto,
+            backup_destination
+        )
 
-        # Si no fue un comando de backup, intentar reporte interactivo
-        if not resultado.get('processed', False):
-            resultado_reporte = procesar_mensaje_reporte(text, numero_remoto)
-            if resultado_reporte.get('processed'):
+        # Si no fue backup, intentar reportes
+        if not resultado.get("processed", False):
+            resultado_reporte = procesar_mensaje_reporte(
+                text,
+                numero_remoto
+            )
+
+            if resultado_reporte.get("processed"):
                 return resultado_reporte
 
         return resultado
@@ -1318,4 +1396,219 @@ def get_interactive_status():
             for key, report in REPORT_TYPES.items()
         },
         'message': 'Envía un mensaje por WhatsApp a la conversación activa para iniciar un reporte interactivo'
+
+# ===========================================================================
+# TEST DE WHATSAPP (PARTE INICIAL DE CONFLICTO DE ANTHONY)
+# ===========================================================================
+
+@bp.route('/api/test-whatsapp', methods=['POST'])
+def test_whatsapp():
+    """Prueba el envío de mensajes por WhatsApp."""
+    data = request.get_json() or {}
+    destination = data.get('destination', login_security_destination if login_security_destination else current_destination)
+    message = data.get('message', "✅ ¡Prueba exitosa de Evolution API!")
+    result = send_message(message, destination)
+    return jsonify(result)
+
+# ===========================================================================
+# MONITOREO DE SEGURIDAD DE LOGIN
+# ===========================================================================
+
+def _check_login_security_impl():
+    """Implementación interna de la verificación de seguridad de login."""
+    global login_security_last_check, login_security_last_alert
+
+    print("\n[DEBUG SEGURO] [SCHEDULER] Ejecutando verificación periódica de seguridad de login...")
+    print(f"[DEBUG SEGURO] [SCHEDULER] Número destino configurado: {login_security_destination}")
+    login_security_last_check = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Ejecutar verificación y capturar info de alerta
+    alert_info = check_failed_attempts(login_security_destination)
+
+    # Si se envió una alerta, actualizar la variable global
+    if alert_info:
+        login_security_last_alert = alert_info
+        print(f"[DEBUG SEGURO] [ALERTA] Última alerta registrada: {alert_info}")
+
+
+def check_login_security():
+    """Función ejecutada por APScheduler dentro de Flask app_context."""
+    if _flask_app:
+        with _flask_app.app_context():
+            _check_login_security_impl()
+    else:
+        print("[ERROR] No se ha configurado la app Flask.")
+
+
+@bp.route('/api/login-security/start', methods=['POST'])
+def start_login_security():
+    """Inicia el monitoreo de seguridad de login."""
+    global login_security_is_running, login_security_destination
+
+    print("\n[DEBUG SEGURO] [START] Endpoint /api/login-security/start llamado!")
+    print(f"[DEBUG SEGURO] [START] login_security_is_running actualmente: {login_security_is_running}")
+
+    if login_security_is_running:
+        print(f"[DEBUG SEGURO] [START] El monitoreo ya está activo, devolviendo error...")
+        return jsonify({'success': False, 'message': 'El monitoreo de seguridad de login ya está activo'})
+
+    data = request.get_json() or {}
+    phone_number = data.get('number', '').strip()
+    print(f"[DEBUG SEGURO] [START] Número recibido del frontend: '{phone_number}'")
+    
+    if phone_number:
+        is_valid, result = validate_phone(phone_number)
+        print(f"[DEBUG SEGURO] [START] Resultado de validate_phone: is_valid={is_valid}, result={result}")
+        
+        if not is_valid:
+            return jsonify({'success': False, 'message': result}), 400
+        login_security_destination = result
+        print(f"[DEBUG SEGURO] [START] login_security_destination actualizado a: {login_security_destination}")
+
+    print(f"[DEBUG SEGURO] [START] Agregando job al scheduler con intervalo de {LOGIN_CHECK_INTERVAL_MINUTES} minutos...")
+    scheduler.add_job(
+        check_login_security,
+        'interval',
+        minutes=LOGIN_CHECK_INTERVAL_MINUTES,
+        id='login_security_check',
+        replace_existing=True
+    )
+    print(f"[DEBUG SEGURO] [START] Job agregado al scheduler correctamente!")
+
+    login_security_is_running = True
+    
+    print(f"[DEBUG SEGURO] [START] Ejecutando verificación INMEDIATA (no esperar el primer intervalo)!")
+    check_login_security()
+    
+    job = scheduler.get_job('login_security_check')
+    next_run = str(job.next_run_time) if job else None
+    print(f"[DEBUG SEGURO] [START] Próxima ejecución programada para: {next_run}")
+
+    return jsonify({
+        'success': True,
+        'message': f'Monitoreo de seguridad de login iniciado. Verificación cada {LOGIN_CHECK_INTERVAL_MINUTES} minutos.',
+        'destination': login_security_destination,
+        'interval_minutes': LOGIN_CHECK_INTERVAL_MINUTES,
+        'next_run': next_run
+    })
+
+
+@bp.route('/api/login-security/stop', methods=['GET'])
+def stop_login_security():
+    """Detiene el monitoreo de seguridad de login."""
+    global login_security_is_running
+    if not login_security_is_running:
+        return jsonify({'success': False, 'message': 'El monitoreo de seguridad de login no está activo'})
+    try:
+        scheduler.remove_job('login_security_check')
+    except Exception:
+        pass
+    login_security_is_running = False
+    return jsonify({'success': True, 'message': 'Monitoreo de seguridad de login detenido'})
+
+
+@bp.route('/api/login-security/status', methods=['GET'])
+def login_security_status():
+    """Devuelve el estado actual del monitoreo de seguridad de login."""
+    import services.login_security_service as ls_service
+    job = scheduler.get_job('login_security_check')
+    next_run = str(job.next_run_time) if job else None
+    return jsonify({
+        'is_running': login_security_is_running,
+        'destination': login_security_destination,
+        'last_check': login_security_last_check,
+        'last_alert': login_security_last_alert,  # Nueva información
+        'next_run': next_run,
+        'interval_minutes': LOGIN_CHECK_INTERVAL_MINUTES,
+        'failed_attempts': ls_service.failed_attempts,
+        'pending_alerts': ls_service.pending_alerts
+    })
+
+
+@bp.route('/api/login-security/test', methods=['GET'])
+def test_login_security():
+    """Endpoint de prueba: ejecuta la verificación de seguridad de login manualmente."""
+    import services.login_security_service as ls_service
+    global login_security_last_check, login_security_last_alert
+
+    print(f"\n[DEBUG SEGURO] [TEST] Endpoint /api/login-security/test llamado!")
+    print(f"[DEBUG SEGURO] [TEST] Ejecutando verificación manual...")
+    login_security_last_check = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Ejecutar verificación y capturar info de alerta
+    alert_info = check_failed_attempts(login_security_destination)
+
+    # Si se envió una alerta, actualizar la variable global
+    if alert_info:
+        login_security_last_alert = alert_info
+        print(f"[DEBUG SEGURO] [ALERTA] Última alerta registrada: {alert_info}")
+
+    print(f"[DEBUG SEGURO] [TEST] Verificación manual completada!")
+    return jsonify({
+        'success': True,
+        'message': 'Verificación de seguridad de login ejecutada manualmente. Revisa la consola de Flask y tu WhatsApp.',
+        'destination': login_security_destination,
+        'debug_info': {
+            'failed_attempts': ls_service.failed_attempts,
+            'pending_alerts': ls_service.pending_alerts,
+            'current_pending_alert_username': ls_service.current_pending_alert_username,
+            'last_alert': login_security_last_alert
+        }
+    })
+
+
+@bp.route('/api/login-security/debug', methods=['GET'])
+def debug_login_security():
+    """Endpoint de depuración: muestra el estado actual del sistema de seguridad login."""
+    import services.login_security_service as ls_service
+    return jsonify({
+        'success': True,
+        'destination': login_security_destination,
+        'debug_info': {
+            'failed_attempts': ls_service.failed_attempts,
+            'pending_alerts': ls_service.pending_alerts,
+            'last_processed_log_id': ls_service.last_processed_log_id,
+            'last_processed_error_time': ls_service.last_processed_error_time,
+            'current_pending_alert_username': ls_service.current_pending_alert_username
+        }
+    })
+
+
+@bp.route('/api/login-security/reset', methods=['POST'])
+def reset_login_security():
+    """Resetea TODO el estado del monitoreo de seguridad de login (para pruebas)."""
+    import services.login_security_service as ls_service
+    global login_security_last_check, login_security_last_alert
+
+    ls_service.failed_attempts = {}
+    ls_service.pending_alerts = {}
+    ls_service.last_processed_log_id = 0
+    ls_service.last_processed_error_time = None
+    ls_service.current_pending_alert_username = None
+    login_security_last_check = None
+    login_security_last_alert = None
+
+    return jsonify({
+        'success': True,
+        'message': 'Estado del monitoreo de seguridad de login reseteado COMPLETAMENTE!'
+    })
+
+
+@bp.route('/api/login-security/simulate-failure', methods=['POST'])
+def simulate_login_failure():
+    """
+    Endpoint de prueba: simula un intento fallido de login para pruebas
+    insertando un registro directamente en la tabla AuditoriaLoginsFallidos.
+    """
+    data = request.get_json() or {}
+    username = data.get('username', 'test_user')
+
+    from services.login_security_service import simulate_failed_login
+
+    resultado = simulate_failed_login(username)
+
+    return jsonify({
+        'success': resultado['exito'],
+        'message': resultado['mensaje'],
+        'username': username
     })
