@@ -220,15 +220,6 @@ function Disparador() {
     return () => clearInterval(interval);
   }, [loginSecurityRunning]);
 
-  const validateInput = (number) => {
-    const cleaned = number.replace(/\s/g, '').replace(/\+/g, '')
-    if (!cleaned) return 'Ingresa un número de teléfono'
-    if (!/^\d+$/.test(cleaned)) return 'Solo se permiten números'
-    if (cleaned.length < 10) return `Número muy corto (${cleaned.length} dígitos). Mínimo 10.`
-    if (cleaned.length > 13) return `Número muy largo (${cleaned.length} dígitos). Máximo 13.`
-    return ''
-  }
-
 //AQUI TERMINA
 
   const handleStart = async () => {
@@ -2547,6 +2538,12 @@ function Disparador() {
                     <FiPlay size={14} />
                   )}
                   {reportsLoading ? " Iniciando..." : " Iniciar Reportes"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
       {/* Fila 5: Info Seguridad Login - Disparador Seguridad Login */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
         <div className="m-table-card">
@@ -2637,6 +2634,7 @@ function Disparador() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

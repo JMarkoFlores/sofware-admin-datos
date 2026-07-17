@@ -39,6 +39,7 @@ from services.interactive_reports_service import (
     actualizar_estado_reporte_enviado,
     obtener_estado_conversacion,
     REPORT_TYPES,
+)
 from services.login_security_service import (
     check_failed_attempts,
     procesar_comando_login,
@@ -1396,6 +1397,7 @@ def get_interactive_status():
             for key, report in REPORT_TYPES.items()
         },
         'message': 'Envía un mensaje por WhatsApp a la conversación activa para iniciar un reporte interactivo'
+    })
 
 # ===========================================================================
 # TEST DE WHATSAPP (PARTE INICIAL DE CONFLICTO DE ANTHONY)
