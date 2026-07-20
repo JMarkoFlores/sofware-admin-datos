@@ -60,11 +60,11 @@ def _get_bibliouni_connection_string_msdb():
             f"PWD={Config.BIBLIOUNI_PASSWORD};"
         )
 
-
+#EJECUCIÓN DEL SCRIPT DE LA BD
 def verificar_backup_hoy():
     """
-    Verifica si existe un backup de Bibliouni realizado hoy Y que el archivo
-    físico aún exista en disco (evita falsos positivos si borraron el .bak).
+    Verifica si existe un backup de Bibliouni realizado hoy llamando al
+    Stored Procedure sp_VerificarBackupHoy en msdb.
 
     Returns:
         dict: {
@@ -81,49 +81,28 @@ def verificar_backup_hoy():
     try:
         with pyodbc.connect(conn_str, timeout=15) as conn:
             cursor = conn.cursor()
-            # Obtener la ruta física y hora del backup más reciente de hoy
-            cursor.execute("""
-                SELECT TOP 1 mf.physical_device_name, bs.backup_start_date
-                FROM msdb.dbo.backupset bs
-                JOIN msdb.dbo.backupmediafamily mf ON bs.media_set_id = mf.media_set_id
-                WHERE bs.database_name = ?
-                  AND bs.backup_start_date >= CAST(GETDATE() AS DATE)
-                ORDER BY bs.backup_start_date DESC
-            """, (Config.BIBLIOUNI_DB,))
+            cursor.execute("EXEC msdb.dbo.sp_VerificarBackupHoy ?", (Config.BIBLIOUNI_DB,))
+
             row = cursor.fetchone()
+            existe = bool(row[0]) if row[0] is not None else False
+            ruta = row[1]
+            hora_raw = row[2]
+            tamano_mb = row[3]
+            mensaje = row[4]
 
-            if not row:
-                return {
-                    'existe': False,
-                    'detalle': f'No se encontró registro de backup de {Config.BIBLIOUNI_DB} para el {hoy}.',
-                    'ruta': None,
-                    'hora': None,
-                    'tamano_mb': None
-                }
+            hora_formateada = None
+            if hora_raw is not None:
+                hora_formateada = hora_raw.strftime('%H:%M:%S') if hasattr(hora_raw, 'strftime') else str(hora_raw)
 
-            ruta_backup = row[0]
-            hora_backup = row[1]
-            print(f"[DEBUG Backup] Último backup registrado: {ruta_backup} a las {hora_backup}")
+            print(f"[DEBUG Backup] SP verificacion: existe={existe}, ruta={ruta}, hora={hora_formateada}")
 
-            # Verificar que el archivo físico exista y tenga contenido
-            if os.path.exists(ruta_backup) and os.path.getsize(ruta_backup) > 0:
-                tamano_mb = os.path.getsize(ruta_backup) / (1024 * 1024)
-                hora_formateada = hora_backup.strftime('%H:%M:%S') if hasattr(hora_backup, 'strftime') else str(hora_backup)
-                return {
-                    'existe': True,
-                    'detalle': f'Backup verificado: {ruta_backup} ({tamano_mb:.2f} MB).',
-                    'ruta': ruta_backup,
-                    'hora': hora_formateada,
-                    'tamano_mb': tamano_mb
-                }
-            else:
-                return {
-                    'existe': False,
-                    'detalle': f'El registro de backup existe pero el archivo fue eliminado o está vacío: {ruta_backup}',
-                    'ruta': ruta_backup,
-                    'hora': None,
-                    'tamano_mb': None
-                }
+            return {
+                'existe': existe,
+                'detalle': mensaje or 'Sin mensaje del SP',
+                'ruta': ruta,
+                'hora': hora_formateada,
+                'tamano_mb': tamano_mb
+            }
 
     except Exception as e:
         return {
@@ -175,71 +154,67 @@ def obtener_tablas_bibliouni():
         return []
 
 
+#LLAMADA AL SCRIPT DE LA BD
 def ejecutar_backup():
     """
-    Ejecuta BACKUP DATABASE de Bibliouni a disco.
+    Ejecuta el backup de Bibliouni llamando al Stored Procedure
+    sp_EjecutarBackupBibliouni en master.
 
     Returns:
         dict: {'exito': bool, 'ruta': str, 'mensaje': str}
     """
-    print(f"[DEBUG Backup] Iniciando ejecución de backup...")
-    print(f"[DEBUG Backup] BACKUP_PATH={BACKUP_PATH}")
-
-    os.makedirs(BACKUP_PATH, exist_ok=True)
-    print(f"[DEBUG Backup] Carpeta backup creada/verificada.")
-
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    nombre_archivo = f"Bibliouni_{timestamp}.bak"
-    ruta_completa = os.path.join(BACKUP_PATH, nombre_archivo)
-
-    # Escapar para SQL Server (doblar backslashes en T-SQL)
-    ruta_sql = ruta_completa.replace('\\', '\\\\')
-
-    sql = f"""
-    BACKUP DATABASE [{Config.BIBLIOUNI_DB}] 
-    TO DISK = N'{ruta_sql}' 
-    WITH FORMAT, COMPRESSION, STATS=10;
-    """
-    print(f"[DEBUG Backup] Archivo destino: {ruta_completa}")
-    print(f"[DEBUG Backup] SQL: {sql.strip()}")
+    print(f"[DEBUG Backup] Iniciando ejecución de backup via SP...")
 
     conn_str = _get_bibliouni_connection_string()
-    print(f"[DEBUG Backup] Conectando a SQL Server (master)...")
+    print(f"[DEBUG Backup] Conectando a SQL Server (master) para ejecutar SP...")
 
     try:
         with pyodbc.connect(conn_str, timeout=120, autocommit=True) as conn:
             print(f"[DEBUG Backup] Conexión establecida (autocommit=True).")
             cursor = conn.cursor()
-            print(f"[DEBUG Backup] Ejecutando BACKUP DATABASE...")
-            cursor.execute(sql)
-            # Consumir resultados para evitar errores de cursor
-            while cursor.nextset():
-                pass
-            print(f"[DEBUG Backup] Comando ejecutado. Cerrando conexión...")
+            print(f"[DEBUG Backup] Ejecutando sp_EjecutarBackupBibliouni...")
 
-        # Verificar que el archivo fue creado y tiene tamaño > 0
-        print(f"[DEBUG Backup] Verificando archivo...")
-        if os.path.exists(ruta_completa) and os.path.getsize(ruta_completa) > 0:
-            tamano = os.path.getsize(ruta_completa)
-            print(f"[DEBUG Backup] Archivo creado correctamente: {tamano} bytes")
+            cursor.execute("EXEC master.dbo.sp_EjecutarBackupBibliouni ?", (Config.BIBLIOUNI_DB,))
+
+            # El SP ejecuta BACKUP DATABASE con STATS=10, lo que genera multiples
+            # mensajes de progreso como result sets intermedios. Consumimos todos
+            # hasta llegar al SELECT final que devuelve el resultado.
+            row = None
+            while True:
+                try:
+                    if cursor.description:
+                        row = cursor.fetchone()
+                    if not cursor.nextset():
+                        break
+                except pyodbc.ProgrammingError:
+                    break
+
+            if row:
+                exito = bool(row[0]) if row[0] is not None else False
+                ruta = row[1]
+                mensaje = row[2]
+            else:
+                # Si no pudimos leer el SELECT final pero el SP no lanzo error,
+                # verificamos manualmente si el backup del dia existe.
+                print("[DEBUG Backup] No se obtuvo result set del SP. Verificando manualmente...")
+                resultado = verificar_backup_hoy()
+                exito = resultado.get('existe', False)
+                ruta = resultado.get('ruta')
+                mensaje = resultado.get('detalle', 'Backup ejecutado. Verificacion manual necesaria.')
+
+            print(f"[DEBUG Backup] SP respuesta: exito={exito}, ruta={ruta}, mensaje={mensaje}")
+
             return {
-                'exito': True,
-                'ruta': ruta_completa,
-                'mensaje': f'Backup generado exitosamente: {nombre_archivo}'
-            }
-        else:
-            print(f"[DEBUG Backup] ERROR: El archivo no existe o está vacío.")
-            return {
-                'exito': False,
-                'ruta': ruta_completa,
-                'mensaje': 'El backup pareció ejecutarse pero el archivo no fue encontrado o está vacío.'
+                'exito': exito,
+                'ruta': ruta,
+                'mensaje': mensaje or 'El SP no devolvió mensaje'
             }
 
     except Exception as e:
         print(f"[DEBUG Backup] ERROR en ejecución: {type(e).__name__}: {str(e)}")
         return {
             'exito': False,
-            'ruta': ruta_completa,
+            'ruta': None,
             'mensaje': f'Error al ejecutar backup: {str(e)}'
         }
 
