@@ -117,13 +117,13 @@ function Disparador() {
   };
 
   // ===================== MENSAJE - FETCH =====================
-  const [loginSecurityRunning, setLoginSecurityRunning] = useState(false)
-  const [loginSecurityStatus, setLoginSecurityStatus] = useState({})
-  const [loginSecurityLoading, setLoginSecurityLoading] = useState(false)
-  const [loginSecurityPhone, setLoginSecurityPhone] = useState('51900685850')
-  const [loginSecurityError, setLoginSecurityError] = useState('')
-  const [isEditingLoginSecurity, setIsEditingLoginSecurity] = useState(false)
-  const loginSecurityInputRef = useRef(null)
+  const [loginSecurityRunning, setLoginSecurityRunning] = useState(false);
+  const [loginSecurityStatus, setLoginSecurityStatus] = useState({});
+  const [loginSecurityLoading, setLoginSecurityLoading] = useState(false);
+  const [loginSecurityPhone, setLoginSecurityPhone] = useState("51900685850");
+  const [loginSecurityError, setLoginSecurityError] = useState("");
+  const [isEditingLoginSecurity, setIsEditingLoginSecurity] = useState(false);
+  const loginSecurityInputRef = useRef(null);
 
   const fetchStatus = async (updatePhone = false) => {
     try {
@@ -169,19 +169,22 @@ function Disparador() {
 
   const fetchLoginSecurityStatus = async (updatePhone = false) => {
     try {
-      const res = await axios.get('/api/login-security/status')
-      setLoginSecurityStatus(res.data)
-      setLoginSecurityRunning(res.data.is_running)
-      if (updatePhone && !isEditingLoginSecurity && res.data.destination) setLoginSecurityPhone(res.data.destination)
-    } catch (e) { console.log('Error fetching login security status:', e) }
-  }
+      const res = await axios.get("/api/login-security/status");
+      setLoginSecurityStatus(res.data);
+      setLoginSecurityRunning(res.data.is_running);
+      if (updatePhone && !isEditingLoginSecurity && res.data.destination)
+        setLoginSecurityPhone(res.data.destination);
+    } catch (e) {
+      console.log("Error fetching login security status:", e);
+    }
+  };
 
-  useEffect(() => { 
-    fetchStatus(true) 
-    fetchBackupStatus(true)
-    fetchFragStatus(true)
-    fetchLoginSecurityStatus(true)
-  }, [])
+  useEffect(() => {
+    fetchStatus(true);
+    fetchBackupStatus(true);
+    fetchFragStatus(true);
+    fetchLoginSecurityStatus(true);
+  }, []);
 
   useEffect(() => {
     fetchStatus(true);
@@ -202,19 +205,6 @@ function Disparador() {
     return () => clearInterval(interval);
   }, [backupRunning]);
 
-//AQUI INICIA
-
-  // useEffect(() => {
-  //   if (!fragRunning) return;
-  //   const interval = setInterval(() => fetchFragStatus(false), 10000);
-  //   return () => clearInterval(interval);
-  // }, [fragRunning]);
-  //   if (!loginSecurityRunning) return
-  //   const interval = setInterval(() => fetchLoginSecurityStatus(false), 10000)
-  //   return () => clearInterval(interval)
-  // }, [loginSecurityRunning])
-
-  //
   useEffect(() => {
     if (!fragRunning) return;
     const interval = setInterval(() => fetchFragStatus(false), 10000);
@@ -226,8 +216,6 @@ function Disparador() {
     const interval = setInterval(() => fetchLoginSecurityStatus(false), 10000);
     return () => clearInterval(interval);
   }, [loginSecurityRunning]);
-
-//AQUI TERMINA
 
   const handleStart = async () => {
     setError("");
@@ -527,43 +515,58 @@ function Disparador() {
 
   // ===================== RENDER =====================
   const handleLoginSecurityStart = async () => {
-    setLoginSecurityError('')
-    const validationError = validateInput(loginSecurityPhone)
-    if (validationError) { setLoginSecurityError(validationError); return }
-    setLoginSecurityLoading(true)
+    setLoginSecurityError("");
+    const validationError = validateInput(loginSecurityPhone);
+    if (validationError) {
+      setLoginSecurityError(validationError);
+      return;
+    }
+    setLoginSecurityLoading(true);
     try {
-      const res = await axios.post('/api/login-security/start', { number: loginSecurityPhone.trim() })
+      const res = await axios.post("/api/login-security/start", {
+        number: loginSecurityPhone.trim(),
+      });
       if (res.data.success) {
-        setLoginSecurityRunning(true)
+        setLoginSecurityRunning(true);
         setLoginSecurityStatus((prev) => ({
           ...prev,
           destination: loginSecurityPhone.trim(),
-        }))
-      } else setLoginSecurityError(res.data.message)
+        }));
+      } else setLoginSecurityError(res.data.message);
     } catch (e) {
-      setLoginSecurityError('Error al iniciar: ' + (e.response?.data?.message || e.message))
+      setLoginSecurityError(
+        "Error al iniciar: " + (e.response?.data?.message || e.message),
+      );
     }
-    setLoginSecurityLoading(false)
-  }
+    setLoginSecurityLoading(false);
+  };
 
   const handleLoginSecurityStop = async () => {
-    setLoginSecurityLoading(true)
+    setLoginSecurityLoading(true);
     try {
-      const res = await axios.get('/api/login-security/stop')
-      if (res.data.success) { setLoginSecurityRunning(false); fetchLoginSecurityStatus(true) }
-    } catch (e) { setLoginSecurityError('Error al detener: ' + e.message) }
-    setLoginSecurityLoading(false)
-  }
+      const res = await axios.get("/api/login-security/stop");
+      if (res.data.success) {
+        setLoginSecurityRunning(false);
+        fetchLoginSecurityStatus(true);
+      }
+    } catch (e) {
+      setLoginSecurityError("Error al detener: " + e.message);
+    }
+    setLoginSecurityLoading(false);
+  };
 
-  const handleLoginSecurityInputChange = (e) => { 
-    setIsEditingLoginSecurity(true); 
-    setLoginSecurityPhone(e.target.value); 
-    setLoginSecurityError(''); 
-    clearTimeout(window.loginSecurityEditTimeout); 
-    window.loginSecurityEditTimeout = setTimeout(() => setIsEditingLoginSecurity(false), 2000) 
-  }
-  const handleLoginSecurityInputBlur = () => setIsEditingLoginSecurity(false)
-  const handleLoginSecurityInputFocus = () => setIsEditingLoginSecurity(true)
+  const handleLoginSecurityInputChange = (e) => {
+    setIsEditingLoginSecurity(true);
+    setLoginSecurityPhone(e.target.value);
+    setLoginSecurityError("");
+    clearTimeout(window.loginSecurityEditTimeout);
+    window.loginSecurityEditTimeout = setTimeout(
+      () => setIsEditingLoginSecurity(false),
+      2000,
+    );
+  };
+  const handleLoginSecurityInputBlur = () => setIsEditingLoginSecurity(false);
+  const handleLoginSecurityInputFocus = () => setIsEditingLoginSecurity(true);
 
   return (
     <div className="m-page">
@@ -616,10 +619,17 @@ function Disparador() {
             <div className="m-kpi-label">Fragmentación</div>
           </div>
         </div>
-        <div className="m-kpi-card" style={{ background: 'linear-gradient(135deg, #f59e0b, #fbbf24)' }}>
-          <div className="m-kpi-icon"><FiAlertCircle size={20} /></div>
+        <div
+          className="m-kpi-card"
+          style={{ background: "linear-gradient(135deg, #f59e0b, #fbbf24)" }}
+        >
+          <div className="m-kpi-icon">
+            <FiAlertCircle size={20} />
+          </div>
           <div>
-            <div className="m-kpi-value">{loginSecurityRunning ? 'Activo' : 'Detenido'}</div>
+            <div className="m-kpi-value">
+              {loginSecurityRunning ? "Activo" : "Detenido"}
+            </div>
             <div className="m-kpi-label">Seguridad Login</div>
           </div>
         </div>
@@ -799,7 +809,7 @@ function Disparador() {
               >
                 <strong>Error:</strong> {error}
               </div>
-            )            }
+            )}
 
             <div
               className="m-form-actions"
@@ -903,7 +913,11 @@ function Disparador() {
               }}
             >
               El sistema verifica automáticamente a las{" "}
-              <strong>{String(backupHour).padStart(2, "0")}:{String(backupMinute).padStart(2, "0")} ({backupStatus.timezone || "America/Lima"})</strong>{" "}
+              <strong>
+                {String(backupHour).padStart(2, "0")}:
+                {String(backupMinute).padStart(2, "0")} (
+                {backupStatus.timezone || "America/Lima"})
+              </strong>{" "}
               si existe un backup de la base de datos <strong>Bibliouni</strong>{" "}
               realizado durante el día.
             </p>
@@ -916,7 +930,8 @@ function Disparador() {
               }}
             >
               <li style={{ marginBottom: "4px" }}>
-                Verificación diaria a las {String(backupHour).padStart(2, "0")}:{String(backupMinute).padStart(2, "0")}
+                Verificación diaria a las {String(backupHour).padStart(2, "0")}:
+                {String(backupMinute).padStart(2, "0")}
               </li>
               <li style={{ marginBottom: "4px" }}>
                 Alerta por WhatsApp si falta backup
@@ -1180,6 +1195,7 @@ function Disparador() {
               </div>
             )}
 
+            {/* Lógica para el boton que está en backup  */}
             <div
               className="m-form-actions"
               style={{ justifyContent: "flex-start", marginBottom: "16px" }}
@@ -1934,8 +1950,7 @@ function Disparador() {
             >
               Programa el envío automático de reportes bibliotecarios por
               WhatsApp según la periodicidad que configures. El sistema enviará
-              un menú interactivo al número destino en los horarios
-              programados.
+              un menú interactivo al número destino en los horarios programados.
             </p>
             <ul
               style={{
@@ -1957,9 +1972,7 @@ function Disparador() {
               <li style={{ marginBottom: "4px" }}>
                 Envío automático por WhatsApp mediante Evolution API
               </li>
-              <li style={{ marginBottom: "4px" }}>
-                Zona horaria America/Lima
-              </li>
+              <li style={{ marginBottom: "4px" }}>Zona horaria America/Lima</li>
             </ul>
 
             <div
@@ -2078,9 +2091,7 @@ function Disparador() {
               justifyContent: "space-between",
             }}
           >
-            <div
-              style={{ display: "flex", alignItems: "center", gap: "10px" }}
-            >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <FiSettings size={18} style={{ color: "#8b5cf6" }} />
               <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
                 Configuración de Reportes
@@ -2683,97 +2694,244 @@ function Disparador() {
           </div>
         </div>
 
-      {/* Fila 5: Info Seguridad Login - Disparador Seguridad Login */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-        <div className="m-table-card">
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FiAlertCircle size={18} style={{ color: '#f59e0b' }} />
-            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Información Seguridad Login</h3>
+        {/* Fila 5: Info Seguridad Login - Disparador Seguridad Login */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "20px",
+            marginBottom: "20px",
+          }}
+        >
+          <div className="m-table-card">
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <FiAlertCircle size={18} style={{ color: "#f59e0b" }} />
+              <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
+                Información Seguridad Login
+              </h3>
+            </div>
+            <div style={{ padding: "20px" }}>
+              <p
+                style={{
+                  margin: "0 0 8px 0",
+                  color: "#475569",
+                  fontSize: "14px",
+                }}
+              >
+                Monitorea intentos fallidos de inicio de sesión en SQL Server.
+                Cuando un usuario falla más de 2 veces, envía una alerta por
+                WhatsApp y espera tu confirmación para bloquear la cuenta.
+              </p>
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: "20px",
+                  color: "#64748b",
+                  fontSize: "13px",
+                }}
+              >
+                <li style={{ marginBottom: "4px" }}>
+                  Verificación automática cada 5 minutos
+                </li>
+                <li style={{ marginBottom: "4px" }}>
+                  Alerta por WhatsApp cuando un usuario falla más de 2 veces
+                </li>
+                <li style={{ marginBottom: "4px" }}>
+                  Responde{" "}
+                  <code
+                    style={{
+                      background: "rgba(245,158,11,0.1)",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    BLOQUEA
+                  </code>{" "}
+                  para deshabilitar la cuenta
+                </li>
+                <li>
+                  No bloquea automáticamente, requiere confirmación humana
+                </li>
+              </ul>
+            </div>
           </div>
-          <div style={{ padding: '20px' }}>
-            <p style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '14px' }}>
-              Monitorea intentos fallidos de inicio de sesión en SQL Server. Cuando un usuario falla más de 2 veces,
-              envía una alerta por WhatsApp y espera tu confirmación para bloquear la cuenta.
-            </p>
-            <ul style={{ margin: 0, paddingLeft: '20px', color: '#64748b', fontSize: '13px' }}>
-              <li style={{ marginBottom: '4px' }}>Verificación automática cada 5 minutos</li>
-              <li style={{ marginBottom: '4px' }}>Alerta por WhatsApp cuando un usuario falla más de 2 veces</li>
-              <li style={{ marginBottom: '4px' }}>Responde <code style={{ background: 'rgba(245,158,11,0.1)', padding: '2px 6px', borderRadius: '4px' }}>BLOQUEA</code> para deshabilitar la cuenta</li>
-              <li>No bloquea automáticamente, requiere confirmación humana</li>
-            </ul>
-          </div>
-        </div>
 
-        <div className="m-table-card">
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FiAlertCircle size={18} style={{ color: '#f59e0b' }} />
-            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Monitoreo Seguridad Login</h3>
-            <span className={`m-badge ${loginSecurityRunning ? 'm-badge-paid' : 'm-badge-pending'}`} style={{ marginLeft: 'auto' }}>
-              {loginSecurityRunning ? <FiCheckCircle size={11} /> : <FiAlertCircle size={11} />}
-              {loginSecurityRunning ? ' En ejecución' : ' Detenido'}
-            </span>
-          </div>
-          <div style={{ padding: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-              <div className="m-form-group" style={{ margin: 0 }}>
-                <label><FiPhone size={13} /> Número de Destino</label>
+          <div className="m-table-card">
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <FiAlertCircle size={18} style={{ color: "#f59e0b" }} />
+              <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
+                Monitoreo Seguridad Login
+              </h3>
+              <span
+                className={`m-badge ${loginSecurityRunning ? "m-badge-paid" : "m-badge-pending"}`}
+                style={{ marginLeft: "auto" }}
+              >
                 {loginSecurityRunning ? (
-                  <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>{loginSecurityPhone}</span>
+                  <FiCheckCircle size={11} />
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <input
-                      ref={loginSecurityInputRef}
-                      type="text"
-                      value={loginSecurityPhone}
-                      onChange={handleLoginSecurityInputChange}
-                      onBlur={handleLoginSecurityInputBlur}
-                      onFocus={handleLoginSecurityInputFocus}
-                      placeholder="519XXXXXXXX"
+                  <FiAlertCircle size={11} />
+                )}
+                {loginSecurityRunning ? " En ejecución" : " Detenido"}
+              </span>
+            </div>
+            <div style={{ padding: "20px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                  gap: "16px",
+                  marginBottom: "16px",
+                }}
+              >
+                <div className="m-form-group" style={{ margin: 0 }}>
+                  <label>
+                    <FiPhone size={13} /> Número de Destino
+                  </label>
+                  {loginSecurityRunning ? (
+                    <span
                       style={{
-                        padding: '10px 14px',
-                        fontSize: '14px',
-                        borderRadius: '8px',
-                        border: loginSecurityError ? '1px solid #ef4444' : '1px solid #e2e8f0',
-                        outline: 'none',
-                        transition: 'border-color 0.2s'
+                        display: "block",
+                        padding: "10px 14px",
+                        background: "#f1f5f9",
+                        borderRadius: "8px",
+                        color: "#475569",
+                        fontWeight: "500",
                       }}
-                    />
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ej: 51952310138 (11 dígitos)</span>
-                  </div>
+                    >
+                      {loginSecurityPhone}
+                    </span>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                      }}
+                    >
+                      <input
+                        ref={loginSecurityInputRef}
+                        type="text"
+                        value={loginSecurityPhone}
+                        onChange={handleLoginSecurityInputChange}
+                        onBlur={handleLoginSecurityInputBlur}
+                        onFocus={handleLoginSecurityInputFocus}
+                        placeholder="519XXXXXXXX"
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: "14px",
+                          borderRadius: "8px",
+                          border: loginSecurityError
+                            ? "1px solid #ef4444"
+                            : "1px solid #e2e8f0",
+                          outline: "none",
+                          transition: "border-color 0.2s",
+                        }}
+                      />
+                      <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                        Ej: 51952310138 (11 dígitos)
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="m-form-group" style={{ margin: 0 }}>
+                  <label>
+                    <FiClock size={13} /> Última Alerta Emitida
+                  </label>
+                  <span
+                    style={{
+                      display: "block",
+                      padding: "10px 14px",
+                      background: "#f1f5f9",
+                      borderRadius: "8px",
+                      color: "#475569",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {loginSecurityStatus.last_alert?.timestamp ||
+                      loginSecurityStatus.last_check ||
+                      "Nunca"}
+                  </span>
+                </div>
+              </div>
+
+              {loginSecurityError && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    borderRadius: "8px",
+                    color: "#dc2626",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <strong>Error:</strong> {loginSecurityError}
+                </div>
+              )}
+
+              <div
+                className="m-form-actions"
+                style={{ justifyContent: "flex-start" }}
+              >
+                {loginSecurityRunning ? (
+                  <button
+                    className="m-btn-danger"
+                    onClick={handleLoginSecurityStop}
+                    disabled={loginSecurityLoading}
+                  >
+                    {loginSecurityLoading ? (
+                      <FiRefreshCw
+                        size={14}
+                        style={{ animation: "spin 1s linear infinite" }}
+                      />
+                    ) : (
+                      <FiSquare size={14} />
+                    )}
+                    {loginSecurityLoading
+                      ? " Deteniendo..."
+                      : " Detener Monitoreo"}
+                  </button>
+                ) : (
+                  <button
+                    className="m-btn-primary"
+                    onClick={handleLoginSecurityStart}
+                    disabled={loginSecurityLoading}
+                  >
+                    {loginSecurityLoading ? (
+                      <FiRefreshCw
+                        size={14}
+                        style={{ animation: "spin 1s linear infinite" }}
+                      />
+                    ) : (
+                      <FiPlay size={14} />
+                    )}
+                    {loginSecurityLoading
+                      ? " Iniciando..."
+                      : " Iniciar Monitoreo"}
+                  </button>
                 )}
               </div>
-
-              <div className="m-form-group" style={{ margin: 0 }}>
-                <label><FiClock size={13} /> Última Alerta Emitida</label>
-                <span style={{ display: 'block', padding: '10px 14px', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontWeight: '500' }}>
-                  {loginSecurityStatus.last_alert?.timestamp || loginSecurityStatus.last_check || 'Nunca'}
-                </span>
-              </div>
-            </div>
-
-            {loginSecurityError && (
-              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', marginBottom: '16px' }}>
-                <strong>Error:</strong> {loginSecurityError}
-              </div>
-            )}
-
-            <div className="m-form-actions" style={{ justifyContent: 'flex-start' }}>
-              {loginSecurityRunning ? (
-                <button className="m-btn-danger" onClick={handleLoginSecurityStop} disabled={loginSecurityLoading}>
-                  {loginSecurityLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSquare size={14} />}
-                  {loginSecurityLoading ? ' Deteniendo...' : ' Detener Monitoreo'}
-                </button>
-              ) : (
-                <button className="m-btn-primary" onClick={handleLoginSecurityStart} disabled={loginSecurityLoading}>
-                  {loginSecurityLoading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiPlay size={14} />}
-                  {loginSecurityLoading ? ' Iniciando...' : ' Iniciar Monitoreo'}
-                </button>
-              )}
             </div>
           </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }
