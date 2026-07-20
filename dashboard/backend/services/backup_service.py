@@ -67,7 +67,13 @@ def verificar_backup_hoy():
     físico aún exista en disco (evita falsos positivos si borraron el .bak).
 
     Returns:
-        dict: {'existe': bool, 'detalle': str}
+        dict: {
+            'existe': bool,
+            'detalle': str,
+            'ruta': str or None,
+            'hora': str or None,
+            'tamano_mb': float or None
+        }
     """
     conn_str = _get_bibliouni_connection_string_msdb()
     hoy = datetime.now().strftime('%Y-%m-%d')
@@ -75,9 +81,9 @@ def verificar_backup_hoy():
     try:
         with pyodbc.connect(conn_str, timeout=15) as conn:
             cursor = conn.cursor()
-            # Obtener la ruta física del backup más reciente de hoy
+            # Obtener la ruta física y hora del backup más reciente de hoy
             cursor.execute("""
-                SELECT TOP 1 mf.physical_device_name
+                SELECT TOP 1 mf.physical_device_name, bs.backup_start_date
                 FROM msdb.dbo.backupset bs
                 JOIN msdb.dbo.backupmediafamily mf ON bs.media_set_id = mf.media_set_id
                 WHERE bs.database_name = ?
@@ -89,29 +95,43 @@ def verificar_backup_hoy():
             if not row:
                 return {
                     'existe': False,
-                    'detalle': f'No se encontró registro de backup de {Config.BIBLIOUNI_DB} para el {hoy}.'
+                    'detalle': f'No se encontró registro de backup de {Config.BIBLIOUNI_DB} para el {hoy}.',
+                    'ruta': None,
+                    'hora': None,
+                    'tamano_mb': None
                 }
 
             ruta_backup = row[0]
-            print(f"[DEBUG Backup] Último backup registrado: {ruta_backup}")
+            hora_backup = row[1]
+            print(f"[DEBUG Backup] Último backup registrado: {ruta_backup} a las {hora_backup}")
 
             # Verificar que el archivo físico exista y tenga contenido
             if os.path.exists(ruta_backup) and os.path.getsize(ruta_backup) > 0:
                 tamano_mb = os.path.getsize(ruta_backup) / (1024 * 1024)
+                hora_formateada = hora_backup.strftime('%H:%M:%S') if hasattr(hora_backup, 'strftime') else str(hora_backup)
                 return {
                     'existe': True,
-                    'detalle': f'Backup verificado: {ruta_backup} ({tamano_mb:.2f} MB).'
+                    'detalle': f'Backup verificado: {ruta_backup} ({tamano_mb:.2f} MB).',
+                    'ruta': ruta_backup,
+                    'hora': hora_formateada,
+                    'tamano_mb': tamano_mb
                 }
             else:
                 return {
                     'existe': False,
-                    'detalle': f'El registro de backup existe pero el archivo fue eliminado o está vacío: {ruta_backup}'
+                    'detalle': f'El registro de backup existe pero el archivo fue eliminado o está vacío: {ruta_backup}',
+                    'ruta': ruta_backup,
+                    'hora': None,
+                    'tamano_mb': None
                 }
 
     except Exception as e:
         return {
             'existe': False,
-            'detalle': f'Error al verificar backup: {str(e)}'
+            'detalle': f'Error al verificar backup: {str(e)}',
+            'ruta': None,
+            'hora': None,
+            'tamano_mb': None
         }
 
 
@@ -250,6 +270,24 @@ def enviar_confirmacion_backup(numero_destino, tablas, ruta_archivo=None):
         f"{ruta_texto}\n"
         "Tablas incluidas:\n"
         f"{tablas_texto}"
+    )
+    return send_message(mensaje, numero_destino)
+
+
+def enviar_confirmacion_backup_existente(numero_destino, hora, ruta, tamano_mb=None):
+    """
+    Envía confirmación cuando ya existe un backup del día actual
+    al momento de iniciar el monitoreo.
+    """
+    tamano_texto = f" ({tamano_mb:.2f} MB)" if tamano_mb else ""
+    mensaje = (
+        "✅ BACKUP YA REALIZADO HOY\n\n"
+        "Base de datos: Bibliouni\n\n"
+        f"🕐 Hora del backup: {hora}\n"
+        f"📁 Archivo:{tamano_texto}\n"
+        f"{ruta}\n\n"
+        "El monitoreo está activo. Si no se detecta un backup futuro, "
+        "se enviará una alerta a esta hora programada."
     )
     return send_message(mensaje, numero_destino)
 

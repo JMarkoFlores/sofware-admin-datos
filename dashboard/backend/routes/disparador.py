@@ -24,6 +24,7 @@ from utils.helpers import log_auditoria
 from services.backup_service import (
     verificar_backup_hoy,
     enviar_alerta_backup_pendiente,
+    enviar_confirmacion_backup_existente,
     procesar_comando_backup,
 )
 from services.fill_factor_service import (
@@ -430,8 +431,8 @@ def check_backup_daily():
 
 @bp.route('/api/backup/start', methods=['POST'])
 def start_backup_scheduler():
-    """Inicia el monitoreo de backup (requiere número explícito)."""
-    global backup_is_running, backup_destination
+    """Inicia el monitoreo de backup (requiere número explícito y horario opcional)."""
+    global backup_is_running, backup_destination, BACKUP_CHECK_HOUR, BACKUP_CHECK_MINUTE
 
     if backup_is_running:
         return jsonify({'success': False, 'message': 'El monitoreo de backup ya está activo'})
@@ -446,10 +447,26 @@ def start_backup_scheduler():
     backup_destination = result
     print(f"[{datetime.now()}] Número de backup actualizado: {backup_destination}")
 
+    # Horario opcional (default: valores actuales de .env)
+    try:
+        hour = int(data.get('hour', BACKUP_CHECK_HOUR))
+        minute = int(data.get('minute', BACKUP_CHECK_MINUTE))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'La hora y el minuto deben ser números enteros'}), 400
+
+    if not (0 <= hour <= 23):
+        return jsonify({'success': False, 'message': 'La hora debe estar entre 0 y 23'}), 400
+    if not (0 <= minute <= 59):
+        return jsonify({'success': False, 'message': 'El minuto debe estar entre 0 y 59'}), 400
+
+    BACKUP_CHECK_HOUR = hour
+    BACKUP_CHECK_MINUTE = minute
+    print(f"[{datetime.now()}] Horario de backup actualizado: {BACKUP_CHECK_HOUR:02d}:{BACKUP_CHECK_MINUTE:02d}")
+
     # Configurar webhook automáticamente en Evolution
     configure_evolution_webhook()
 
-    # Programar verificación diaria a las 7:00 AM (America/Lima)
+    # Programar verificación diaria en el horario indicado
     scheduler.add_job(
         check_backup_daily,
         trigger=CronTrigger(
@@ -462,11 +479,44 @@ def start_backup_scheduler():
     )
 
     backup_is_running = True
+
+    # Verificar si ya existe un backup del día actual. Si existe, notificar
+    # inmediatamente por WhatsApp con la hora y ruta del archivo.
+    backup_exists = False
+    notification_sent = False
+    try:
+        resultado_backup = verificar_backup_hoy()
+        backup_exists = resultado_backup.get('existe', False)
+        if backup_exists:
+            print(f"[{datetime.now()}] Backup del día ya existe. Enviando confirmación a {backup_destination}...")
+            send_result = enviar_confirmacion_backup_existente(
+                backup_destination,
+                hora=resultado_backup.get('hora', 'No disponible'),
+                ruta=resultado_backup.get('ruta', 'No disponible'),
+                tamano_mb=resultado_backup.get('tamano_mb')
+            )
+            notification_sent = send_result.get('success', False)
+            log_auditoria(
+                'NOTIFICACIÓN',
+                'Backup',
+                'Backup del día ya existía al iniciar monitoreo. Confirmación enviada por WhatsApp.',
+                usuario='sistema',
+                resultado='Éxito' if notification_sent else 'Fallo',
+                detalle=f"Hora: {resultado_backup.get('hora')}; Ruta: {resultado_backup.get('ruta')}"
+            )
+            print(f"[{datetime.now()}] Resultado envío confirmación: {send_result}")
+    except Exception as e:
+        print(f"[WARN] No se pudo verificar/notificar backup existente al iniciar: {e}")
+
     return jsonify({
         'success': True,
         'message': f'Monitoreo de backup iniciado para el número {backup_destination}',
         'destination': backup_destination,
-        'next_run': str(scheduler.get_job('backup_check').next_run_time) if scheduler.get_job('backup_check') else None
+        'check_time': f'{BACKUP_CHECK_HOUR:02d}:{BACKUP_CHECK_MINUTE:02d}',
+        'timezone': BACKUP_TIMEZONE,
+        'next_run': str(scheduler.get_job('backup_check').next_run_time) if scheduler.get_job('backup_check') else None,
+        'backup_exists': backup_exists,
+        'notification_sent': notification_sent
     })
 
 

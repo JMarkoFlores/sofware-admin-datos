@@ -31,6 +31,8 @@ function Disparador() {
   const [backupPhone, setBackupPhone] = useState("51900685850");
   const [backupError, setBackupError] = useState("");
   const [isEditingBackup, setIsEditingBackup] = useState(false);
+  const [backupHour, setBackupHour] = useState(7);
+  const [backupMinute, setBackupMinute] = useState(0);
   const backupInputRef = useRef(null);
 
   const [fillFactor, setFillFactor] = useState(80);
@@ -142,6 +144,11 @@ function Disparador() {
       setBackupRunning(res.data.is_running);
       if (updatePhone && !isEditingBackup && res.data.destination)
         setBackupPhone(res.data.destination);
+      if (res.data.check_time) {
+        const [h, m] = res.data.check_time.split(":").map(Number);
+        if (!isNaN(h)) setBackupHour(h);
+        if (!isNaN(m)) setBackupMinute(m);
+      }
     } catch (e) {
       console.log("Error fetching backup status:", e);
     }
@@ -282,14 +289,20 @@ function Disparador() {
     }
     setBackupLoading(true);
     try {
+      const hour = parseInt(backupHour, 10);
+      const minute = parseInt(backupMinute, 10);
       const res = await axios.post("/api/backup/start", {
         number: backupPhone.trim(),
+        hour: isNaN(hour) ? 7 : hour,
+        minute: isNaN(minute) ? 0 : minute,
       });
       if (res.data.success) {
         setBackupRunning(true);
         setBackupStatus((prev) => ({
           ...prev,
           destination: backupPhone.trim(),
+          check_time: res.data.check_time,
+          timezone: res.data.timezone,
         }));
       } else setBackupError(res.data.message);
     } catch (e) {
@@ -326,6 +339,24 @@ function Disparador() {
   };
   const handleBackupInputBlur = () => setIsEditingBackup(false);
   const handleBackupInputFocus = () => setIsEditingBackup(true);
+
+  const handleBackupHourChange = (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = "";
+    if (val !== "" && val < 0) val = 0;
+    if (val !== "" && val > 23) val = 23;
+    setBackupHour(val);
+    setBackupError("");
+  };
+
+  const handleBackupMinuteChange = (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = "";
+    if (val !== "" && val < 0) val = 0;
+    if (val !== "" && val > 59) val = 59;
+    setBackupMinute(val);
+    setBackupError("");
+  };
 
   const handleFillFactor = async () => {
     setFillFactorError("");
@@ -738,7 +769,7 @@ function Disparador() {
 
               <div className="m-form-group" style={{ margin: 0 }}>
                 <label>
-                  <FiClock size={13} /> Último Envío
+                  <FiClock size={13} /> Próxima Verificación
                 </label>
                 <span
                   style={{
@@ -872,8 +903,9 @@ function Disparador() {
               }}
             >
               El sistema verifica automáticamente a las{" "}
-              <strong>7:00 AM (America/Lima)</strong> si existe un backup de la
-              base de datos <strong>Bibliouni</strong> realizado durante el día.
+              <strong>{String(backupHour).padStart(2, "0")}:{String(backupMinute).padStart(2, "0")} ({backupStatus.timezone || "America/Lima"})</strong>{" "}
+              si existe un backup de la base de datos <strong>Bibliouni</strong>{" "}
+              realizado durante el día.
             </p>
             <ul
               style={{
@@ -884,7 +916,7 @@ function Disparador() {
               }}
             >
               <li style={{ marginBottom: "4px" }}>
-                Verificación diaria a las 7:00 AM
+                Verificación diaria a las {String(backupHour).padStart(2, "0")}:{String(backupMinute).padStart(2, "0")}
               </li>
               <li style={{ marginBottom: "4px" }}>
                 Alerta por WhatsApp si falta backup
@@ -978,6 +1010,113 @@ function Disparador() {
                     />
                     <span style={{ fontSize: "12px", color: "#94a3b8" }}>
                       Ej: 51952310138 (11 dígitos)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label>
+                  <FiClock size={13} /> Horario de Verificación
+                </label>
+                {backupRunning ? (
+                  <span
+                    style={{
+                      display: "block",
+                      padding: "10px 14px",
+                      background: "#f1f5f9",
+                      borderRadius: "8px",
+                      color: "#475569",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {backupStatus.check_time || "07:00"}
+                  </span>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <div style={{ flex: 1 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#94a3b8",
+                            marginBottom: "4px",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Hora
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={backupHour}
+                          onChange={handleBackupHourChange}
+                          placeholder="7"
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "14px",
+                            borderRadius: "8px",
+                            border: "1px solid #e2e8f0",
+                            outline: "none",
+                            transition: "border-color 0.2s",
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#94a3b8",
+                            marginBottom: "4px",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Minuto
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={59}
+                          value={backupMinute}
+                          onChange={handleBackupMinuteChange}
+                          placeholder="0"
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "14px",
+                            borderRadius: "8px",
+                            border: "1px solid #e2e8f0",
+                            outline: "none",
+                            transition: "border-color 0.2s",
+                          }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-end",
+                          paddingBottom: "10px",
+                          color: "#64748b",
+                          fontWeight: "500",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {String(backupHour).padStart(2, "0")}:
+                        {String(backupMinute).padStart(2, "0")}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      Hora local ({backupStatus.timezone || "America/Lima"})
                     </span>
                   </div>
                 )}
