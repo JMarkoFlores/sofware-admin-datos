@@ -11,7 +11,9 @@ Extensiones incluidas:
 """
 
 import os
+import re
 import requests
+import unicodedata
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -538,18 +540,32 @@ def test_backup_check():
 
 
 def _extract_text_from_webhook_message(message):
-    """Extrae texto de diferentes estructuras de mensaje de Evolution API."""
+    """
+    Extrae texto de diferentes estructuras de mensaje de Evolution API.
+    Soporta mensajes directos, respuestas citadas, botones, listas, etc.
+    """
     if not isinstance(message, dict):
         return ''
+
+    # A veces Evolution anida el mensaje real dentro de message.message
+    inner = message.get('message')
+    if isinstance(inner, dict):
+        text = _extract_text_from_webhook_message(inner)
+        if text:
+            return text
 
     # Texto directo en la conversación
     if message.get('conversation'):
         return message.get('conversation', '').strip()
 
-    # Mensaje extendido con texto opcional
+    # Mensaje extendido con texto opcional (respuesta citada)
     extended = message.get('extendedTextMessage') or {}
     if isinstance(extended, dict):
-        text = extended.get('text', '') or extended.get('contextInfo', {}).get('quotedMessage', {}).get('conversation', '')
+        text = extended.get('text', '')
+        if text:
+            return text.strip()
+        # Fallback: texto dentro de un mensaje citado
+        text = extended.get('contextInfo', {}).get('quotedMessage', {}).get('conversation', '')
         if text:
             return text.strip()
 
@@ -600,6 +616,113 @@ def _extract_text_from_webhook_message(message):
     return ''
 
 
+def _normalizar_numero_jid(remote_jid):
+    """
+    Extrae solo los dígitos de un remoteJid de WhatsApp,
+    eliminando @s.whatsapp.net, sufijos de dispositivo (:1, :2), etc.
+    """
+    if not remote_jid:
+        return ''
+    numero = remote_jid.split('@')[0]
+    numero = numero.split(':')[0]
+    numero = ''.join(c for c in numero if c.isdigit())
+    return numero
+
+
+def _extract_message_info_from_payload(payload):
+    """
+    Extrae una lista de tuplas (remote_jid, from_me, message_dict) del payload
+    del webhook de Evolution API. Soporta varias estructuras comunes.
+
+    Estructuras soportadas:
+      - payload.data.message + payload.data.key
+      - payload.data.messages[]
+      - payload.message + payload.key
+      - payload.messages[]
+      - payload.data (array de mensajes)
+    """
+    if not isinstance(payload, dict):
+        return []
+
+    resultados = []
+
+    def extraer_de_item(item):
+        """Extrae info de un item que puede tener key/message directos o anidados."""
+        if not isinstance(item, dict):
+            return None
+        key = item.get('key') or {}
+        message = item.get('message')
+        if not isinstance(message, dict):
+            # Algunos payloads anidan message dentro de otro message
+            message = item
+        # Evolution API a veces envía un LID en remoteJid (ej. 153438360961031@lid)
+        # y el número real en remoteJidAlt (ej. 51964253176@s.whatsapp.net).
+        # Preferimos remoteJidAlt porque es el número telefónico real.
+        remote_jid = (
+            key.get('remoteJidAlt') or key.get('remote_jid_alt') or
+            item.get('remoteJidAlt') or item.get('remote_jid_alt') or
+            key.get('remoteJid') or key.get('remote_jid') or
+            item.get('remoteJid') or item.get('remote_jid')
+        )
+        from_me = key.get('fromMe') or key.get('from_me') or item.get('fromMe') or item.get('from_me') or False
+        if remote_jid and isinstance(message, dict):
+            return (remote_jid, bool(from_me), message)
+        return None
+
+    # Estructura 1: payload.data.message
+    data = payload.get('data')
+    if isinstance(data, dict):
+        single = extraer_de_item({
+            'key': data.get('key'),
+            'message': data.get('message')
+        })
+        if single:
+            resultados.append(single)
+
+        # Estructura 2: payload.data.messages[]
+        messages = data.get('messages')
+        if isinstance(messages, list):
+            for msg in messages:
+                info = extraer_de_item(msg)
+                if info:
+                    resultados.append(info)
+
+    # Estructura 3: payload.message
+    if payload.get('message'):
+        single = extraer_de_item({
+            'key': payload.get('key'),
+            'message': payload.get('message')
+        })
+        if single:
+            resultados.append(single)
+
+    # Estructura 4: payload.messages[]
+    if isinstance(payload.get('messages'), list):
+        for msg in payload.get('messages'):
+            info = extraer_de_item(msg)
+            if info:
+                resultados.append(info)
+
+    # Estructura 5: payload.data es una lista
+    if isinstance(data, list):
+        for item in data:
+            info = extraer_de_item(item)
+            if info:
+                resultados.append(info)
+
+    return resultados
+
+
+def _es_posible_comando_backup(texto):
+    """Detecta si el texto parece intentar el comando de backup."""
+    if not texto:
+        return False
+    t = texto.upper().strip()
+    t = unicodedata.normalize('NFKD', t).encode('ASCII', 'ignore').decode('ASCII')
+    t = re.sub(r'\s+', ' ', t)
+    return 'RESUELVE BACKUP' in t or t.startswith('RESUELVE')
+
+
 @bp.route('/api/backup/webhook', methods=['POST'])
 def backup_webhook():
     """
@@ -615,133 +738,185 @@ def backup_webhook():
     import json
     print(f"[DEBUG Webhook] Payload completo:\n{json.dumps(payload, indent=2, default=str)}")
 
-    # Extraer datos del payload de Evolution API v2
-    data = payload.get('data', {})
-    key = data.get('key', {})
-    message = data.get('message', {})
+    # Extraer todos los mensajes posibles del payload (soporta varias estructuras)
+    mensajes = _extract_message_info_from_payload(payload)
 
-    remote_jid = key.get('remoteJid', '')
-    from_me = key.get('fromMe', True)
-    text = _extract_text_from_webhook_message(message)
+    if not mensajes:
+        print("[DEBUG Webhook] No se pudo extraer ningún mensaje del payload")
+        return jsonify({'processed': False, 'reason': 'No message found in payload'}), 200
 
-    # Limpiar número: quitar @s.whatsapp.net, sufijos :1/:2 de dispositivos,
-    # y dejar solo dígitos.
-    numero_remoto = remote_jid.split('@')[0] if remote_jid else ''
-    numero_remoto = numero_remoto.split(':')[0]
-    numero_remoto = ''.join(c for c in numero_remoto if c.isdigit())
+    print(f"[DEBUG Webhook] Se extrajeron {len(mensajes)} mensaje(s) del payload")
 
-    print(f"[DEBUG Webhook] Mensaje entrante - remoteJid: {remote_jid}, "
-          f"numero limpio: {numero_remoto}, fromMe: {from_me}, texto: '{text}'")
+    resultados = []
 
-    # Ignorar mensajes: propios, sin texto, de grupos (@g.us) o sin número
-    if from_me or not text or not numero_remoto or '@g.us' in remote_jid:
-        print(f"[DEBUG Webhook] Mensaje ignorado - fromMe:{from_me}, texto:'{text}', "
-              f"numero:{numero_remoto}, esGrupo:{'@g.us' in remote_jid}")
-        return jsonify({'processed': False, 'reason': 'Ignored'}), 200
+    for remote_jid, from_me, message in mensajes:
+        text = _extract_text_from_webhook_message(message)
+        numero_remoto = _normalizar_numero_jid(remote_jid)
 
-    log_auditoria(
-        'WHATSAPP',
-        'WhatsApp',
-        'Mensaje recibido por webhook de WhatsApp',
-        usuario='sistema',
-        resultado='Éxito',
-        detalle=f'Número: {numero_remoto}; Texto: {text[:160]}'
-    )
+        print(f"[DEBUG Webhook] Mensaje entrante - remoteJid: {remote_jid}, "
+              f"numero limpio: {numero_remoto}, fromMe: {from_me}, texto: '{text}'")
+        print(f"[DEBUG Webhook] backup_destination actual: '{backup_destination}'")
 
-    texto_upper = text.strip().upper()
+        # Si no se extrajo texto, loguear los campos del mensaje para diagnóstico
+        if not text:
+            import json
+            print(f"[DEBUG Webhook] Mensaje sin texto extraído. Campos disponibles: {list(message.keys())}")
+            print(f"[DEBUG Webhook] Mensaje completo: {json.dumps(message, indent=2, default=str)}")
 
-    # Ejecutar procesamiento dentro de app_context para que
-    # log_auditoria y db.session funcionen correctamente.
-    # Solo se procesa UNA VEZ para evitar doble ejecución de comandos.
-    
-    
-    ###Aqui empezó el conflicto (de mi parte)
-    # def _procesar():
-    #     if texto_upper.startswith('FACTOR LLENADO'):
-    #         return procesar_comando_fill_factor(text, numero_remoto, backup_destination)
-    # # log_auditoria y db.session funcionen correctamente
-    
-    # ###Aqui empezó el conflicto (de la parte de anthony)
-    # if texto_upper.startswith('FACTOR LLENADO'):
-    #     # Comando de fill factor: FACTOR LLENADO <porcentaje>
-    #     if _flask_app:
-    #         with _flask_app.app_context():
-    #             resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
-    #     else:
-    #         print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-    #         resultado = procesar_comando_fill_factor(text, numero_remoto, backup_destination)
-    # elif texto_upper.startswith('BLOQUEA'):
-    #     # Comando de seguridad de login: BLOQUEA <username>
-    #     if _flask_app:
-    #         with _flask_app.app_context():
-    #             resultado = procesar_comando_login(text, numero_remoto, login_security_destination)
-    #     else:
-    #         print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-    #         resultado = procesar_comando_login(text, numero_remoto, login_security_destination)
-    # else:
-    #     # Comando de backup: RESUELVE BACKUP (u otros futuros)
-    #     if _flask_app:
-    #         with _flask_app.app_context():
-    #             resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
-    #     else:
-    #         print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
-    #         resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        # Ignorar mensajes: propios, sin texto, de grupos (@g.us) o sin número
+        if from_me or not text or not numero_remoto or '@g.us' in remote_jid:
+            print(f"[DEBUG Webhook] Mensaje ignorado - fromMe:{from_me}, texto:'{text}', "
+                  f"numero:{numero_remoto}, esGrupo:{'@g.us' in remote_jid}")
+            resultados.append({'processed': False, 'reason': 'Ignored'})
+            continue
 
-    #     # Primero intentar comando de backup
-    #     resultado = procesar_comando_backup(text, numero_remoto, backup_destination)
+        log_auditoria(
+            'WHATSAPP',
+            'WhatsApp',
+            'Mensaje recibido por webhook de WhatsApp',
+            usuario='sistema',
+            resultado='Éxito',
+            detalle=f'Número: {numero_remoto}; Texto: {text[:160]}'
+        )
 
-    #     # Si no fue un comando de backup, intentar reporte interactivo
-    #     if not resultado.get('processed', False):
-    #         resultado_reporte = procesar_mensaje_reporte(text, numero_remoto)
-    #         if resultado_reporte.get('processed'):
-    #             return resultado_reporte
+        texto_upper = text.strip().upper()
 
-    #     return resultado
-###
-    def _procesar():
-        
-        if texto_upper.startswith('FACTOR LLENADO'):
-            return procesar_comando_fill_factor(
+        def _procesar():
+            if texto_upper.startswith('FACTOR LLENADO'):
+                return procesar_comando_fill_factor(
+                    text,
+                    numero_remoto,
+                    backup_destination
+                )
+
+            elif texto_upper.startswith('BLOQUEA'):
+                return procesar_comando_login(
+                    text,
+                    numero_remoto,
+                    login_security_destination
+                )
+
+            # Primero intentar comando de backup
+            resultado = procesar_comando_backup(
                 text,
                 numero_remoto,
                 backup_destination
             )
 
-        elif texto_upper.startswith('BLOQUEA'):
-            return procesar_comando_login(
-                text,
-                numero_remoto,
-                login_security_destination
-            )
+            # Si no fue backup y el mensaje NO parece un comando de backup,
+            # intentar reportes interactivos.
+            if not resultado.get("processed", False) and not _es_posible_comando_backup(text):
+                resultado_reporte = procesar_mensaje_reporte(
+                    text,
+                    numero_remoto
+                )
 
-        # Primero intentar comando de backup
-        resultado = procesar_comando_backup(
-            text,
-            numero_remoto,
-            backup_destination
-        )
+                if resultado_reporte.get("processed"):
+                    return resultado_reporte
 
-        # Si no fue backup, intentar reportes
-        if not resultado.get("processed", False):
-            resultado_reporte = procesar_mensaje_reporte(
-                text,
-                numero_remoto
-            )
+            return resultado
 
-            if resultado_reporte.get("processed"):
-                return resultado_reporte
+        if _flask_app:
+            with _flask_app.app_context():
+                resultado = _procesar()
+        else:
+            print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
+            resultado = _procesar()
 
-        return resultado
+        print(f"[DEBUG Webhook] Resultado del procesamiento: {resultado}")
+        resultados.append(resultado)
+
+    # Si solo hay un mensaje, devolver su resultado directamente
+    if len(resultados) == 1:
+        return jsonify(resultados[0]), 200
+
+    return jsonify({'processed': True, 'results': resultados}), 200
+
+
+def obtener_configuracion_webhook():
+    """
+    Consulta en Evolution API la configuración actual del webhook
+    para la instancia configurada.
+    """
+    url = f"{Config.EVOLUTION_URL}/webhook/find/{Config.EVOLUTION_INSTANCE}"
+    headers = {
+        'apikey': Config.EVOLUTION_API_KEY,
+        'Content-Type': 'application/json'
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=30)
+        return {
+            'status_code': resp.status_code,
+            'response': resp.json() if resp.status_code in (200, 201) else resp.text
+        }
+    except Exception as e:
+        return {
+            'status_code': None,
+            'error': str(e)
+        }
+
+
+@bp.route('/api/backup/webhook-info', methods=['GET'])
+def backup_webhook_info():
+    """
+    Devuelve la configuración actual del webhook en Evolution API
+    y la URL que debería estar configurada en este backend.
+    """
+    config = obtener_configuracion_webhook()
+    return jsonify({
+        'configured_webhook_url': WEBHOOK_URL,
+        'evolution_instance': Config.EVOLUTION_INSTANCE,
+        'evolution_url': Config.EVOLUTION_URL,
+        'backup_destination': backup_destination,
+        'webhook_config': config
+    })
+
+
+@bp.route('/api/backup/reconfigure-webhook', methods=['POST'])
+def backup_reconfigure_webhook():
+    """
+    Fuerza la reconfiguración del webhook en Evolution API.
+    Útil si se cambió la URL o si los mensajes entrantes no llegan.
+    """
+    print(f"[{datetime.now()}] Reconfigurando webhook de backup en Evolution...")
+    ok = configure_evolution_webhook()
+    config = obtener_configuracion_webhook()
+    return jsonify({
+        'success': ok,
+        'configured_webhook_url': WEBHOOK_URL,
+        'evolution_instance': Config.EVOLUTION_INSTANCE,
+        'webhook_config': config
+    })
+
+
+@bp.route('/api/backup/simulate', methods=['POST'])
+def simulate_backup_command():
+    """
+    Endpoint de prueba: simula un mensaje entrante de WhatsApp con
+    el comando RESUELVE BACKUP para validar todo el flujo sin depender
+    de Evolution API.
+    """
+    data = request.get_json() or {}
+    numero = str(data.get('number', backup_destination)).strip()
+    texto = str(data.get('text', 'RESUELVE BACKUP')).strip()
+
+    print(f"[DEBUG Simulate Backup] Simulando mensaje de {numero}: '{texto}'")
+
+    def _procesar():
+        return procesar_comando_backup(texto, numero, backup_destination)
 
     if _flask_app:
         with _flask_app.app_context():
             resultado = _procesar()
     else:
-        print("[WARN] _flask_app no está configurado. Ejecutando sin app_context.")
         resultado = _procesar()
 
-    print(f"[DEBUG Webhook] Resultado del procesamiento: {resultado}")
-    return jsonify(resultado), 200
+    return jsonify({
+        'success': resultado.get('exito', False),
+        'number': numero,
+        'text': texto,
+        'result': resultado
+    }), 200
 
 
 @bp.route('/api/reports/simulate-incoming', methods=['POST'])

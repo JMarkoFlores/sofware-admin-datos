@@ -9,7 +9,9 @@ Servicio de monitoreo y ejecución de backups para Bibliouni.
 """
 
 import os
+import re
 import socket
+import unicodedata
 import pyodbc
 from datetime import datetime
 from config.settings import Config
@@ -262,6 +264,22 @@ def enviar_error_backup(numero_destino):
     return send_message(mensaje, numero_destino)
 
 
+def _normalizar_comando(texto):
+    """
+    Normaliza un texto para comparación de comandos:
+    - mayúsculas
+    - quita acentos
+    - reemplaza múltiples espacios/saltos de línea/tab por uno solo
+    - elimina espacios al inicio/final
+    """
+    if not texto:
+        return ''
+    t = texto.upper().strip()
+    t = unicodedata.normalize('NFKD', t).encode('ASCII', 'ignore').decode('ASCII')
+    t = re.sub(r'\s+', ' ', t)
+    return t
+
+
 def procesar_comando_backup(texto, numero_remoto, numero_destino_configurado):
     """
     Procesa el comando RESUELVE BACKUP recibido por WhatsApp.
@@ -277,16 +295,33 @@ def procesar_comando_backup(texto, numero_remoto, numero_destino_configurado):
     print(f"[DEBUG procesar_comando_backup] Iniciando...")
     print(f"[DEBUG procesar_comando_backup] texto='{texto}', remoto='{numero_remoto}', destino='{numero_destino_configurado}'")
 
-    texto_limpio = texto.strip().upper()
+    texto_limpio = _normalizar_comando(texto)
 
-    # Validar que el comando sea exacto
+    # Validar que el comando sea exacto (permitiendo espacios extra)
     if texto_limpio != "RESUELVE BACKUP":
         print(f"[DEBUG procesar_comando_backup] Comando no reconocido: '{texto_limpio}'")
         return {'processed': False, 'reason': 'Comando no reconocido'}
 
+    # Normalizar ambos números: dejar solo dígitos para evitar fallos por formato
+    numero_remoto_normalizado = ''.join(c for c in numero_remoto if c.isdigit())
+    numero_destino_normalizado = ''.join(c for c in numero_destino_configurado if c.isdigit())
+
+    # Comparación flexible: en WhatsApp el número puede venir con o sin
+    # prefijo de país (ej. 51900685850 vs 900685850). Se comparan los
+    # últimos 9 dígitos si ambos tienen al menos 9 dígitos.
+    def _ultimos_digitos(numero, n=9):
+        return numero[-n:] if len(numero) >= n else numero
+
+    remoto_final = _ultimos_digitos(numero_remoto_normalizado)
+    destino_final = _ultimos_digitos(numero_destino_normalizado)
+
+    print(f"[DEBUG procesar_comando_backup] Comparación de números - "
+          f"remoto_completo='{numero_remoto_normalizado}', destino_completo='{numero_destino_normalizado}', "
+          f"remoto_ultimos9='{remoto_final}', destino_ultimos9='{destino_final}'")
+
     # Validar que el remitente sea el número destino configurado
-    if numero_remoto != numero_destino_configurado:
-        print(f"[DEBUG procesar_comando_backup] Número no autorizado: {numero_remoto} != {numero_destino_configurado}")
+    if remoto_final != destino_final:
+        print(f"[DEBUG procesar_comando_backup] Número no autorizado: '{numero_remoto_normalizado}' != '{numero_destino_normalizado}'")
         return {'processed': False, 'reason': 'Número no autorizado'}
 
     print(f"[DEBUG procesar_comando_backup] Comando y número validados correctamente.")
