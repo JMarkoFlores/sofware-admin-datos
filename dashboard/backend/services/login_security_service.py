@@ -343,7 +343,7 @@ def send_login_alert(username, attempts, destination):
         "⚠️ ALERTA: POSIBLE AMENAZA\n\n"
         f"El usuario {username} ha fallado su contraseña {attempts} veces en los últimos 30 minutos.\n\n"
         "Para deshabilitar inmediatamente este login responde:\n\n"
-        "BLOQUEA"
+        "BLOQUEAR"
     )
     print(f"[DEBUG SEGURO] Mensaje construido")
 
@@ -452,12 +452,14 @@ def procesar_comando_login(texto, numero_remoto, numero_destino_configurado):
     print(f"[DEBUG SEGURO]    numero_destino_configurado: '{numero_destino_configurado}'")
 
     texto_limpio = texto.strip().upper()
+    partes = texto_limpio.split()
+    comando = partes[0] if partes else ''
 
-    # Validar que el comando sea exactamente BLOQUEA
-    if texto_limpio != "BLOQUEA":
-        print(f"[DEBUG SEGURO] Comando NO reconocido: '{texto_limpio}' (se esperaba 'BLOQUEA')")
+    # Validar que el comando sea BLOQUEAR o BLOQUEA
+    if comando not in ["BLOQUEAR", "BLOQUEA"]:
+        print(f"[DEBUG SEGURO] Comando NO reconocido: '{texto_limpio}' (se esperaba 'BLOQUEAR' o 'BLOQUEA')")
         return {'procesado': False, 'razon': 'Comando no reconocido'}
-    print(f"[DEBUG SEGURO] [OK] Comando 'BLOQUEA' reconocido correctamente")
+    print(f"[DEBUG SEGURO] [OK] Comando '{comando}' reconocido correctamente")
 
     # Validar que el remitente sea el número destino configurado
     if numero_remoto != numero_destino_configurado:

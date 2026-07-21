@@ -825,7 +825,7 @@ def backup_webhook():
                     backup_destination
                 )
 
-            elif texto_upper.startswith('BLOQUEA'):
+            elif texto_upper.startswith('BLOQUEAR') or texto_upper.startswith('BLOQUEA'):
                 return procesar_comando_login(
                     text,
                     numero_remoto,
