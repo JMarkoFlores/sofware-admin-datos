@@ -386,10 +386,26 @@ def disable_login(username):
                 }
             print(f"[DEBUG SEGURO] [OK] Login {username} encontrado")
 
-            # Deshabilitar el login
-            print(f"[DEBUG SEGURO] Ejecutando: ALTER LOGIN [{username}] DISABLE;")
-            cursor.execute(f"ALTER LOGIN [{username}] DISABLE;")
-            print(f"[DEBUG SEGURO] [OK] Comando ALTER LOGIN ejecutado exitosamente")
+            # Deshabilitar el login mediante el Stored Procedure
+            print(f"[DEBUG SEGURO] Ejecutando: EXEC master.dbo.sp_DeshabilitarLogin '{username}'")
+            cursor.execute("EXEC master.dbo.sp_DeshabilitarLogin ?", (username,))
+            row = cursor.fetchone()
+            if row:
+                exito = row[0]
+                mensaje = row[1]
+                if not exito:
+                    print(f"[DEBUG SEGURO] [ERROR] {mensaje}")
+                    return {
+                        'exito': False,
+                        'mensaje': mensaje
+                    }
+                print(f"[DEBUG SEGURO] [OK] {mensaje}")
+            else:
+                print(f"[DEBUG SEGURO] [ERROR] No se obtuvo respuesta del SP")
+                return {
+                    'exito': False,
+                    'mensaje': 'No se obtuvo respuesta del procedimiento almacenado'
+                }
 
             # Registrar en auditoría
             try:
