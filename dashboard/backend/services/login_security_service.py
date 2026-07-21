@@ -366,8 +366,8 @@ def send_login_alert(username, attempts, destination):
 
 
 def disable_login(username):
-    """Deshabilita un login de SQL Server usando el Procedimiento Almacenado sp_BloquearUsuarioLogin."""
-    print(f"[DEBUG SEGURO] Intentando deshabilitar login {username} en SQL Server usando sp_BloquearUsuarioLogin...")
+    """Deshabilita un login de SQL Server usando el Procedimiento Almacenado sp_BloquearUsuarioLogin o fallback directo."""
+    print(f"[DEBUG SEGURO] Intentando deshabilitar login '{username}' en SQL Server...")
     conn_str = _get_sql_server_connection_string()
 
     try:
@@ -375,22 +375,48 @@ def disable_login(username):
             conn.autocommit = True
             cursor = conn.cursor()
 
-            # Intentar ejecutar el Procedimiento Almacenado primero
+            sp_exito = False
+            error_sp = None
+
+            # 1. Intentar llamar al SP con parámetro posicional
             try:
-                print(f"[DEBUG SEGURO] Ejecutando: EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;")
-                cursor.execute("EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;", (username,))
+                print(f"[DEBUG SEGURO] Intentando: EXEC dbo.sp_BloquearUsuarioLogin ?")
+                cursor.execute("EXEC dbo.sp_BloquearUsuarioLogin ?", (username,))
+                sp_exito = True
                 print(f"[DEBUG SEGURO] [OK] Procedimiento Almacenado ejecutado exitosamente")
-            except Exception as sp_err:
-                print(f"[DEBUG SEGURO] [WARN] Ocurrió un inconveniente al llamar al SP ({sp_err}). Aplicando ejecucion directa ALTER LOGIN...")
-                cursor.execute(f"ALTER LOGIN [{username}] DISABLE;")
-                print(f"[DEBUG SEGURO] [OK] Sentencia directa ALTER LOGIN ejecutada exitosamente")
+            except Exception as e1:
+                error_sp = e1
+                print(f"[DEBUG SEGURO] Intento 1 con SP falló ({e1}). Probando ejecución de SP formateada...")
+
+            # 2. Si falló el primer intento, probar con parámetro formateado
+            if not sp_exito:
+                try:
+                    safe_user = username.replace("'", "''")
+                    print(f"[DEBUG SEGURO] Intentando: EXEC dbo.sp_BloquearUsuarioLogin '{safe_user}'")
+                    cursor.execute(f"EXEC dbo.sp_BloquearUsuarioLogin '{safe_user}'")
+                    sp_exito = True
+                    print(f"[DEBUG SEGURO] [OK] Procedimiento Almacenado ejecutado exitosamente")
+                except Exception as e2:
+                    error_sp = e2
+                    print(f"[DEBUG SEGURO] Intento 2 con SP falló ({e2}). Aplicando fallback directo ALTER LOGIN...")
+
+            # 3. Fallback directo DDL en SQL Server (garantía 100%)
+            if not sp_exito:
+                try:
+                    safe_user_bracket = username.replace("]", "]]")
+                    sql_directo = f"ALTER LOGIN [{safe_user_bracket}] DISABLE;"
+                    print(f"[DEBUG SEGURO] Ejecutando fallback directo: {sql_directo}")
+                    cursor.execute(sql_directo)
+                    print(f"[DEBUG SEGURO] [OK] Login '{username}' deshabilitado vía sentencia directa ALTER LOGIN")
+                except Exception as e3:
+                    raise Exception(f"No se pudo deshabilitar el login '{username}'. Error SP: {error_sp}; Error Directo: {e3}")
 
             # Registrar en auditoría
             try:
                 log_auditoria(
                     'BLOQUEO',
                     'Seguridad Login',
-                    f'Login {username} deshabilitado exitosamente via sp_BloquearUsuarioLogin',
+                    f'Login {username} deshabilitado exitosamente en SQL Server',
                     usuario='sistema',
                     resultado='Éxito'
                 )
@@ -411,7 +437,7 @@ def disable_login(username):
             log_auditoria(
                 'ERROR',
                 'Seguridad Login',
-                f'Error al bloquear login {username} via sp_BloquearUsuarioLogin: {str(e)}',
+                f'Error al bloquear login {username}: {str(e)}',
                 usuario='sistema',
                 resultado='Fallo'
             )

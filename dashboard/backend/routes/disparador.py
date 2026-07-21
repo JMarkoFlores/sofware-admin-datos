@@ -1706,6 +1706,12 @@ def start_login_security():
     )
     print(f"[DEBUG SEGURO] [START] Job agregado al scheduler correctamente!")
 
+    # Configurar webhook automáticamente en Evolution API
+    try:
+        configure_evolution_webhook()
+    except Exception as e:
+        print(f"[WARN] No se pudo configurar automáticamente el webhook en Evolution: {e}")
+
     login_security_is_running = True
     
     print(f"[DEBUG SEGURO] [START] Ejecutando verificación INMEDIATA (no esperar el primer intervalo)!")
