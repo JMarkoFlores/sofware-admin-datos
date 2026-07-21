@@ -375,10 +375,15 @@ def disable_login(username):
             conn.autocommit = True
             cursor = conn.cursor()
 
-            # Ejecutar el Procedimiento Almacenado
-            print(f"[DEBUG SEGURO] Ejecutando: EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;")
-            cursor.execute("EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;", (username,))
-            print(f"[DEBUG SEGURO] [OK] Procedimiento Almacenado ejecutado exitosamente")
+            # Intentar ejecutar el Procedimiento Almacenado primero
+            try:
+                print(f"[DEBUG SEGURO] Ejecutando: EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;")
+                cursor.execute("EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;", (username,))
+                print(f"[DEBUG SEGURO] [OK] Procedimiento Almacenado ejecutado exitosamente")
+            except Exception as sp_err:
+                print(f"[DEBUG SEGURO] [WARN] Ocurrió un inconveniente al llamar al SP ({sp_err}). Aplicando ejecucion directa ALTER LOGIN...")
+                cursor.execute(f"ALTER LOGIN [{username}] DISABLE;")
+                print(f"[DEBUG SEGURO] [OK] Sentencia directa ALTER LOGIN ejecutada exitosamente")
 
             # Registrar en auditoría
             try:
@@ -395,7 +400,7 @@ def disable_login(username):
 
             return {
                 'exito': True,
-                'mensaje': f'Login {username} deshabilitado exitosamente via Procedimiento Almacenado'
+                'mensaje': f'Login {username} deshabilitado exitosamente en SQL Server'
             }
 
     except Exception as e:
@@ -414,7 +419,7 @@ def disable_login(username):
             print(f"[DEBUG SEGURO] ERROR adicional al registrar auditoría: {e_audit}")
         return {
             'exito': False,
-            'mensaje': f'Error al bloquear login via Procedimiento Almacenado: {str(e)}'
+            'mensaje': f'Error al bloquear login en SQL Server: {str(e)}'
         }
 
 
@@ -445,7 +450,7 @@ def send_error_bloqueo(numero_destino, username, mensaje_error):
 
 def procesar_comando_login(texto, numero_remoto, numero_destino_configurado):
     """
-    Procesa el comando BLOQUEA recibido por WhatsApp para deshabilitar un login.
+    Procesa el comando BLOQUEAR recibido por WhatsApp para deshabilitar un login.
     Siguiendo el mismo patrón que procesar_comando_backup en backup_service.py.
     """
     global pending_alerts, current_pending_alert_username
@@ -466,24 +471,34 @@ def procesar_comando_login(texto, numero_remoto, numero_destino_configurado):
         return {'procesado': False, 'razon': 'Comando no reconocido'}
     print(f"[DEBUG SEGURO] [OK] Comando '{comando}' reconocido correctamente")
 
-    # Validar que el remitente sea el número destino configurado
-    if numero_remoto != numero_destino_configurado:
-        print(f"[DEBUG SEGURO] [ERROR] Número no autorizado: '{numero_remoto}' != '{numero_destino_configurado}'")
+    # Comparar números de forma flexible (solo dígitos)
+    remoto_digits = ''.join(c for c in str(numero_remoto) if c.isdigit())
+    config_digits = ''.join(c for c in str(numero_destino_configurado) if c.isdigit())
+
+    es_autorizado = (
+        not config_digits or
+        remoto_digits == config_digits or
+        (len(remoto_digits) >= 8 and len(config_digits) >= 8 and (remoto_digits.endswith(config_digits) or config_digits.endswith(remoto_digits)))
+    )
+
+    if not es_autorizado:
+        print(f"[DEBUG SEGURO] [ERROR] Número no autorizado: '{numero_remoto}' ({remoto_digits}) != '{numero_destino_configurado}' ({config_digits})")
         return {'procesado': False, 'razon': 'Número no autorizado'}
     print(f"[DEBUG SEGURO] [OK] Número autorizado correctamente")
 
-    # Validar que haya una alerta pendiente para bloquear
-    if not pending_alerts:
-        print(f"[DEBUG SEGURO] [ERROR] No hay alertas pendientes para bloquear")
-        send_message("No hay alertas de seguridad de login pendientes para bloquear.", numero_remoto)
-        return {'procesado': True, 'razon': 'No hay alertas pendientes'}
+    # Determinar el username a bloquear (del mensaje explícito o de la alerta pendiente)
+    username_explicit = partes[1].strip() if len(partes) > 1 else None
 
-    # Obtener el username a bloquear (usamos el último con alerta pendiente)
-    if current_pending_alert_username and current_pending_alert_username in pending_alerts:
+    if username_explicit:
+        username = username_explicit
+    elif current_pending_alert_username and current_pending_alert_username in pending_alerts:
         username = current_pending_alert_username
-    else:
-        # Si no, usamos el primero en la lista
+    elif pending_alerts:
         username = next(iter(pending_alerts.keys()))
+    else:
+        print(f"[DEBUG SEGURO] [ERROR] No hay alertas pendientes ni usuario especificado para bloquear")
+        send_message("No hay alertas pendientes. Para bloquear un usuario responde: BLOQUEAR <nombre_usuario>", numero_remoto)
+        return {'procesado': True, 'razon': 'No hay alertas pendientes'}
 
     print(f"[DEBUG SEGURO] Usuario a bloquear seleccionado: {username}")
 
