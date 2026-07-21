@@ -801,8 +801,18 @@ def backup_webhook():
             print(f"[DEBUG Webhook] Mensaje entrante - remoteJid: {remote_jid}, "
                   f"numero limpio: {numero_remoto}, fromMe: {from_me}, texto: '{text}'")
 
-        # Ignorar mensajes: propios, sin texto, de grupos (@g.us) o sin número
-        if from_me or not text or not numero_remoto or '@g.us' in remote_jid:
+        texto_upper = text.strip().upper()
+
+        es_comando_control = (
+            texto_upper.startswith('BLOQUEAR') or
+            texto_upper.startswith('BLOQUEA') or
+            texto_upper.startswith('RESUELVE') or
+            texto_upper.startswith('FACTOR LLENADO')
+        )
+
+        # Ignorar mensajes sin texto, de grupos (@g.us) o sin número
+        # Si from_me es True, solo ignorar si NO es un comando explícito de control (ej: BLOQUEAR)
+        if (from_me and not es_comando_control) or not text or not numero_remoto or '@g.us' in remote_jid:
             resultados.append({'processed': False, 'reason': 'Ignored'})
             continue
 
@@ -1705,6 +1715,12 @@ def start_login_security():
         replace_existing=True
     )
     print(f"[DEBUG SEGURO] [START] Job agregado al scheduler correctamente!")
+
+    # Configurar webhook automáticamente en Evolution API
+    try:
+        configure_evolution_webhook()
+    except Exception as e:
+        print(f"[WARN] No se pudo configurar automáticamente el webhook en Evolution: {e}")
 
     login_security_is_running = True
     
