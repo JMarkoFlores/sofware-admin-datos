@@ -370,49 +370,10 @@ def disable_login(username):
             conn.autocommit = True
             cursor = conn.cursor()
 
-<<<<<<< HEAD
             # Ejecutar el Procedimiento Almacenado
             print(f"[DEBUG SEGURO] Ejecutando: EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;")
             cursor.execute("EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;", (username,))
             print(f"[DEBUG SEGURO] [OK] Procedimiento Almacenado ejecutado exitosamente")
-=======
-            # Validar que el login existe antes de intentar deshabilitarlo
-            print(f"[DEBUG SEGURO] Verificando si el login {username} existe en SQL Server...")
-            cursor.execute("""
-                SELECT name 
-                FROM sys.server_principals 
-                WHERE name = ? AND type IN ('S', 'U')
-            """, (username,))
-
-            if not cursor.fetchone():
-                print(f"[DEBUG SEGURO] [ERROR] El login {username} NO existe en SQL Server")
-                return {
-                    'exito': False,
-                    'mensaje': f'El login {username} no existe en SQL Server'
-                }
-            print(f"[DEBUG SEGURO] [OK] Login {username} encontrado")
-
-            # Deshabilitar el login mediante el Stored Procedure
-            print(f"[DEBUG SEGURO] Ejecutando: EXEC master.dbo.sp_DeshabilitarLogin '{username}'")
-            cursor.execute("EXEC master.dbo.sp_DeshabilitarLogin ?", (username,))
-            row = cursor.fetchone()
-            if row:
-                exito = row[0]
-                mensaje = row[1]
-                if not exito:
-                    print(f"[DEBUG SEGURO] [ERROR] {mensaje}")
-                    return {
-                        'exito': False,
-                        'mensaje': mensaje
-                    }
-                print(f"[DEBUG SEGURO] [OK] {mensaje}")
-            else:
-                print(f"[DEBUG SEGURO] [ERROR] No se obtuvo respuesta del SP")
-                return {
-                    'exito': False,
-                    'mensaje': 'No se obtuvo respuesta del procedimiento almacenado'
-                }
->>>>>>> d619c959bdf06d22afa1a510d57f4e84a3968283
 
             # Registrar en auditoría
             try:
