@@ -20,11 +20,14 @@ BEGIN
         RETURN;
     END
 
-    -- Retornar multas pendientes ordenadas por monto descendente
+    -- Retornar multas pendientes con información adicional
     SELECT TOP (@top_n)
         CONCAT(lec.nombres, ' ', lec.apellidos) AS lector,
+        lec.carrera,
         m.monto,
-        m.motivo
+        m.motivo,
+        CONVERT(VARCHAR(10), m.created_at, 120) AS fecha_creacion,
+        DATEDIFF(DAY, m.created_at, GETDATE()) AS dias_desde_creacion
     FROM multas m
     INNER JOIN lectores lec ON m.lector_id = lec.id
     WHERE m.pagada = 0

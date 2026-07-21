@@ -20,13 +20,20 @@ BEGIN
         RETURN;
     END
 
-    -- Retornar los libros más prestados
+    -- Retornar los libros más prestados con información adicional
     SELECT TOP (@top_n)
         l.titulo AS titulo_libro,
-        COUNT(p.id) AS total_prestamos
+        a.nombre AS autor,
+        c.nombre AS categoria,
+        COUNT(p.id) AS total_prestamos,
+        l.ejemplares_disponibles,
+        l.ejemplares_total,
+        CAST(l.ejemplares_disponibles AS VARCHAR) + '/' + CAST(l.ejemplares_total AS VARCHAR) AS disponibilidad
     FROM libros l
     INNER JOIN prestamos p ON l.id = p.libro_id
-    GROUP BY l.id, l.titulo
+    LEFT JOIN autores a ON l.autor_id = a.id
+    LEFT JOIN categorias c ON l.categoria_id = c.id
+    GROUP BY l.id, l.titulo, a.nombre, c.nombre, l.ejemplares_disponibles, l.ejemplares_total
     ORDER BY total_prestamos DESC;
 END
 GO

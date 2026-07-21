@@ -148,12 +148,15 @@ Devuelve un SELECT con las columnas:
 
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
-| `total_libros` | `INT` | Total de libros registrados |
+| `total_libros` | `INT` | Total de libros (títulos únicos) |
+| `total_ejemplares` | `INT` | Total de ejemplares (suma de ejemplares_total) |
 | `libros_disponibles` | `INT` | Suma de ejemplares disponibles |
+| `porcentaje_disponibles` | `DECIMAL(5,2)` | Porcentaje de ejemplares disponibles |
 | `total_autores` | `INT` | Total de autores |
 | `total_categorias` | `INT` | Total de categorías |
 | `total_lectores` | `INT` | Total de lectores |
 | `prestamos_activos` | `INT` | Préstamos en estado activo |
+| `promedio_prestamos_lector` | `DECIMAL(5,2)` | Promedio de préstamos por lector |
 | `multas_pendientes` | `INT` | Cantidad de multas no pagadas |
 | `monto_multas_pendientes` | `DECIMAL(10,2)` | Monto total de multas pendientes |
 
@@ -175,7 +178,12 @@ Devuelve un SELECT con las columnas:
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | `titulo_libro` | `NVARCHAR` | Título del libro |
+| `autor` | `NVARCHAR` | Nombre del autor |
+| `categoria` | `NVARCHAR` | Categoría del libro |
 | `total_prestamos` | `INT` | Cantidad total de préstamos |
+| `ejemplares_disponibles` | `INT` | Ejemplares disponibles |
+| `ejemplares_total` | `INT` | Total de ejemplares |
+| `disponibilidad` | `VARCHAR` | Formato "disponibles/total" |
 
 ### sp_reporte_multas_pendientes
 
@@ -195,8 +203,11 @@ Devuelve un SELECT con las columnas:
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | `lector` | `NVARCHAR` | Nombre completo del lector |
+| `carrera` | `NVARCHAR` | Carrera del lector |
 | `monto` | `DECIMAL` | Monto de la multa |
 | `motivo` | `NVARCHAR` | Motivo de la multa |
+| `fecha_creacion` | `VARCHAR(10)` | Fecha de creación (YYYY-MM-DD) |
+| `dias_desde_creacion` | `INT` | Días desde que se generó la multa |
 
 ### sp_reporte_prestamos_vencidos
 
@@ -216,8 +227,10 @@ Devuelve un SELECT con las columnas:
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | `lector` | `NVARCHAR` | Nombre completo del lector |
+| `telefono` | `NVARCHAR` | Teléfono del lector |
 | `libro` | `NVARCHAR` | Título del libro |
 | `vencido_desde` | `VARCHAR(10)` | Fecha de vencimiento (YYYY-MM-DD) |
+| `dias_retraso` | `INT` | Días de retraso |
 
 ### sp_reporte_libros_danhados
 
@@ -237,4 +250,6 @@ Devuelve un SELECT con las columnas:
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | `titulo_libro` | `NVARCHAR` | Título del libro |
-| `total_danios` | `INT` | Cantidad de reportes de daño |
+| `lector_responsable` | `NVARCHAR` | Nombre del lector responsable |
+| `fecha_dano` | `VARCHAR(10)` | Fecha del daño (YYYY-MM-DD) |
+| `observaciones` | `NVARCHAR` | Observaciones del daño |

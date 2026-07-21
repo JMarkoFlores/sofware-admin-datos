@@ -134,25 +134,28 @@ def estadisticas_generales():
             if row:
                 return {
                     'total_libros': row.total_libros or 0,
+                    'total_ejemplares': row.total_ejemplares or 0,
                     'libros_disponibles': row.libros_disponibles or 0,
+                    'porcentaje_disponibles': float(row.porcentaje_disponibles or 0),
                     'total_autores': row.total_autores or 0,
                     'total_categorias': row.total_categorias or 0,
                     'total_lectores': row.total_lectores or 0,
                     'prestamos_activos': row.prestamos_activos or 0,
+                    'promedio_prestamos_lector': float(row.promedio_prestamos_lector or 0),
                     'multas_pendientes': row.multas_pendientes or 0,
                     'monto_multas_pendientes': float(row.monto_multas_pendientes or 0)
                 }
             return {
-                'total_libros': 0, 'libros_disponibles': 0, 'total_autores': 0,
-                'total_categorias': 0, 'total_lectores': 0, 'prestamos_activos': 0,
-                'multas_pendientes': 0, 'monto_multas_pendientes': 0.0
+                'total_libros': 0, 'total_ejemplares': 0, 'libros_disponibles': 0, 'porcentaje_disponibles': 0.0,
+                'total_autores': 0, 'total_categorias': 0, 'total_lectores': 0, 'prestamos_activos': 0,
+                'promedio_prestamos_lector': 0.0, 'multas_pendientes': 0, 'monto_multas_pendientes': 0.0
             }
     except Exception as e:
         print(f"[ERROR] Error ejecutando sp_reporte_estadisticas_generales: {e}")
         return {
-            'total_libros': 0, 'libros_disponibles': 0, 'total_autores': 0,
-            'total_categorias': 0, 'total_lectores': 0, 'prestamos_activos': 0,
-            'multas_pendientes': 0, 'monto_multas_pendientes': 0.0
+            'total_libros': 0, 'total_ejemplares': 0, 'libros_disponibles': 0, 'porcentaje_disponibles': 0.0,
+            'total_autores': 0, 'total_categorias': 0, 'total_lectores': 0, 'prestamos_activos': 0,
+            'promedio_prestamos_lector': 0.0, 'multas_pendientes': 0, 'monto_multas_pendientes': 0.0
         }
 
 
@@ -164,7 +167,7 @@ def libros_mas_prestados(limit=20):
             cursor = conn.cursor()
             cursor.execute("EXEC Bibliouni.dbo.sp_reporte_libros_mas_prestados @top_n = ?", (limit,))
             rows = cursor.fetchall()
-            return [(row.titulo_libro, row.total_prestamos) for row in rows]
+            return [(row.titulo_libro, row.autor, row.categoria, row.total_prestamos, row.disponibilidad) for row in rows]
     except Exception as e:
         print(f"[ERROR] Error ejecutando sp_reporte_libros_mas_prestados: {e}")
         return []
@@ -178,7 +181,7 @@ def multas_pendientes(limit=20):
             cursor = conn.cursor()
             cursor.execute("EXEC Bibliouni.dbo.sp_reporte_multas_pendientes @top_n = ?", (limit,))
             rows = cursor.fetchall()
-            return [(row.lector, float(row.monto), row.motivo) for row in rows]
+            return [(row.lector, row.carrera, float(row.monto), row.motivo, row.fecha_creacion, row.dias_desde_creacion) for row in rows]
     except Exception as e:
         print(f"[ERROR] Error ejecutando sp_reporte_multas_pendientes: {e}")
         return []
@@ -192,7 +195,7 @@ def prestamos_vencidos(limit=20):
             cursor = conn.cursor()
             cursor.execute("EXEC Bibliouni.dbo.sp_reporte_prestamos_vencidos @top_n = ?", (limit,))
             rows = cursor.fetchall()
-            return [(row.lector, row.libro, row.vencido_desde) for row in rows]
+            return [(row.lector, row.telefono, row.libro, row.vencido_desde, row.dias_retraso) for row in rows]
     except Exception as e:
         print(f"[ERROR] Error ejecutando sp_reporte_prestamos_vencidos: {e}")
         return []
@@ -206,7 +209,7 @@ def libros_dañados_recientes(dias=30):
             cursor = conn.cursor()
             cursor.execute("EXEC Bibliouni.dbo.sp_reporte_libros_danhados @dias = ?", (dias,))
             rows = cursor.fetchall()
-            return [(row.titulo_libro, row.total_danios) for row in rows]
+            return [(row.titulo_libro, row.lector_responsable, row.fecha_dano, row.observaciones) for row in rows]
     except Exception as e:
         print(f"[ERROR] Error ejecutando sp_reporte_libros_danhados: {e}")
         return []
@@ -222,11 +225,14 @@ def _generar_pdf_por_tipo(report_type):
         contenido = []
         datos_tabla = [
             ['Total de libros', str(stats['total_libros'])],
+            ['Total de ejemplares', str(stats['total_ejemplares'])],
             ['Libros disponibles', str(stats['libros_disponibles'])],
+            ['Porcentaje disponibles', f"{stats['porcentaje_disponibles']:.1f}%"],
             ['Autores', str(stats['total_autores'])],
             ['Categorías', str(stats['total_categorias'])],
             ['Lectores activos', str(stats['total_lectores'])],
             ['Préstamos activos', str(stats['prestamos_activos'])],
+            ['Promedio préstamos/lector', f"{stats['promedio_prestamos_lector']:.2f}"],
             ['Multas pendientes', str(stats['multas_pendientes'])],
             ['Monto total multas', f"S/. {stats['monto_multas_pendientes']:.2f}"]
         ]
@@ -239,8 +245,8 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE LIBROS MÁS PRESTADOS'
         contenido = []
         if libros:
-            datos_tabla = [[titulo_libro, str(total)] for titulo_libro, total in libros]
-            tabla = _crear_tabla(datos_tabla, ['Título del Libro', 'Total Préstamos'], [4*inch, 1.5*inch])
+            datos_tabla = [[titulo, autor, categoria, str(total), disponibilidad] for titulo, autor, categoria, total, disponibilidad in libros]
+            tabla = _crear_tabla(datos_tabla, ['Título', 'Autor', 'Categoría', 'Préstamos', 'Disponibilidad'], [2.5*inch, 1.5*inch, 1.2*inch, 0.8*inch, 1*inch])
             contenido.append(tabla)
         else:
             from reportlab.platypus import Paragraph
@@ -312,8 +318,8 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE MULTAS PENDIENTES'
         contenido = []
         if multas:
-            datos_tabla = [[lector, f"S/. {monto:.2f}", motivo or '-'] for lector, monto, motivo in multas]
-            tabla = _crear_tabla(datos_tabla, ['Lector', 'Monto', 'Motivo'], [2*inch, 1.2*inch, 2.8*inch])
+            datos_tabla = [[lector, carrera or '-', f"S/. {monto:.2f}", motivo or '-', fecha, f"{dias} días"] for lector, carrera, monto, motivo, fecha, dias in multas]
+            tabla = _crear_tabla(datos_tabla, ['Lector', 'Carrera', 'Monto', 'Motivo', 'Fecha', 'Días'], [1.8*inch, 1.2*inch, 0.8*inch, 1.5*inch, 0.9*inch, 0.7*inch])
             contenido.append(tabla)
         else:
             styles = getSampleStyleSheet()
@@ -325,8 +331,8 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE PRÉSTAMOS VENCIDOS'
         contenido = []
         if vencidos:
-            datos_tabla = [[lector, libro, fecha_vencimiento] for lector, libro, fecha_vencimiento in vencidos]
-            tabla = _crear_tabla(datos_tabla, ['Lector', 'Libro', 'Vencido Desde'], [2*inch, 2.5*inch, 1.5*inch])
+            datos_tabla = [[lector, telefono or '-', libro, fecha, f"{retraso} días"] for lector, telefono, libro, fecha, retraso in vencidos]
+            tabla = _crear_tabla(datos_tabla, ['Lector', 'Teléfono', 'Libro', 'Vencido Desde', 'Días Retraso'], [1.8*inch, 1.2*inch, 2*inch, 1*inch, 0.9*inch])
             contenido.append(tabla)
         else:
             styles = getSampleStyleSheet()
@@ -338,8 +344,8 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE LIBROS DAÑADOS'
         contenido = []
         if datos:
-            datos_tabla = [[titulo_libro, str(total)] for titulo_libro, total in datos]
-            tabla = _crear_tabla(datos_tabla, ['Título del Libro', 'Total Daños'], [4*inch, 1.5*inch])
+            datos_tabla = [[titulo, lector, fecha, observaciones or '-'] for titulo, lector, fecha, observaciones in datos]
+            tabla = _crear_tabla(datos_tabla, ['Título del Libro', 'Lector Responsable', 'Fecha Daño', 'Observaciones'], [2.5*inch, 1.8*inch, 1*inch, 1.7*inch])
             contenido.append(tabla)
         else:
             styles = getSampleStyleSheet()

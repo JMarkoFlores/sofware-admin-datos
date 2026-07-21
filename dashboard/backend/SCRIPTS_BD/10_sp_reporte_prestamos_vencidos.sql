@@ -20,11 +20,13 @@ BEGIN
         RETURN;
     END
 
-    -- Retornar préstamos vencidos (activos con fecha esperada pasada)
+    -- Retornar préstamos vencidos con información adicional
     SELECT TOP (@top_n)
         CONCAT(lec.nombres, ' ', lec.apellidos) AS lector,
+        lec.telefono,
         l.titulo AS libro,
-        CONVERT(VARCHAR(10), p.fecha_devolucion_esperada, 120) AS vencido_desde
+        CONVERT(VARCHAR(10), p.fecha_devolucion_esperada, 120) AS vencido_desde,
+        DATEDIFF(DAY, p.fecha_devolucion_esperada, GETDATE()) AS dias_retraso
     FROM prestamos p
     INNER JOIN lectores lec ON p.lector_id = lec.id
     INNER JOIN libros l ON p.libro_id = l.id
