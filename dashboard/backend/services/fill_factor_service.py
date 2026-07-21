@@ -85,7 +85,8 @@ def obtener_tablas_usuario():
 def ejecutar_rebuild_indices(fill_factor):
     """
     Reconstruye TODOS los índices de cada tabla de usuario en Bibliouni
-    con el fill factor indicado.
+    con el fill factor indicado, mediante el Stored Procedure
+    dbo.sp_ejecutar_rebuild_indices.
 
     Args:
         fill_factor (int): Porcentaje de llenado (1-100).
@@ -98,70 +99,49 @@ def ejecutar_rebuild_indices(fill_factor):
             'mensaje': str
         }
     """
-    print(f"[DEBUG FillFactor] Iniciando rebuild de índices con FILLFACTOR={fill_factor}...")
-
-    tablas = obtener_tablas_usuario()
-    if not tablas:
-        return {
-            'exito': False,
-            'tablas_procesadas': 0,
-            'tablas_con_error': [],
-            'mensaje': 'No se pudieron obtener las tablas de Bibliouni.'
-        }
+    print(f"[DEBUG FillFactor] Llamando a sp_ejecutar_rebuild_indices con FILLFACTOR={fill_factor}...")
 
     conn_str = _get_connection_string()
-    tablas_ok = []
-    tablas_error = []
-
     try:
         with pyodbc.connect(conn_str, timeout=300, autocommit=True) as conn:
             cursor = conn.cursor()
-            for tabla in tablas:
-                sql = f"ALTER INDEX ALL ON [dbo].[{tabla}] REBUILD WITH (FILLFACTOR = {fill_factor});"
-                print(f"[DEBUG FillFactor] Ejecutando: {sql}")
-                try:
-                    cursor.execute(sql)
-                    # Consumir resultados intermedios (STATS=10 puede emitir múltiples)
-                    while cursor.nextset():
-                        pass
-                    tablas_ok.append(tabla)
-                    print(f"[DEBUG FillFactor] OK -> {tabla}")
-                except Exception as e_tabla:
-                    tablas_error.append({'tabla': tabla, 'error': str(e_tabla)})
-                    print(f"[DEBUG FillFactor] ERROR en {tabla}: {e_tabla}")
+            # Llamar al Stored Procedure — retorna (tablas_procesadas, tablas_con_error, fill_factor_aplicado)
+            cursor.execute("{CALL dbo.sp_ejecutar_rebuild_indices (?)}", fill_factor)
+            row = cursor.fetchone()
+
+            tablas_procesadas = int(row[0]) if row else 0
+            tablas_con_error  = int(row[1]) if row else 0
+            exito = tablas_procesadas > 0 and tablas_con_error == 0
+
+            if exito:
+                mensaje = (
+                    f"Rebuild completado exitosamente. "
+                    f"{tablas_procesadas} tablas procesadas con FILLFACTOR={fill_factor}."
+                )
+            elif tablas_procesadas > 0:
+                mensaje = (
+                    f"Rebuild completado con advertencias. "
+                    f"{tablas_procesadas} tablas OK, {tablas_con_error} con errores."
+                )
+            else:
+                mensaje = "Rebuild falló. No se procesó ninguna tabla correctamente."
+
+            print(f"[DEBUG FillFactor] Resultado SP: procesadas={tablas_procesadas}, errores={tablas_con_error}")
+            return {
+                'exito': exito or tablas_procesadas > 0,
+                'tablas_procesadas': tablas_procesadas,
+                'tablas_con_error': [],   # El SP no retorna detalle por tabla, solo el conteo
+                'mensaje': mensaje
+            }
 
     except Exception as e_conn:
-        print(f"[DEBUG FillFactor] ERROR de conexión: {e_conn}")
+        print(f"[DEBUG FillFactor] ERROR al llamar al SP: {e_conn}")
         return {
             'exito': False,
             'tablas_procesadas': 0,
             'tablas_con_error': [],
-            'mensaje': f'Error de conexión a Bibliouni: {str(e_conn)}'
+            'mensaje': f'Error al ejecutar sp_ejecutar_rebuild_indices: {str(e_conn)}'
         }
-
-    total = len(tablas)
-    procesadas = len(tablas_ok)
-    exito = procesadas > 0 and len(tablas_error) == 0
-
-    if exito:
-        mensaje = (
-            f"Rebuild completado exitosamente. "
-            f"{procesadas}/{total} tablas procesadas con FILLFACTOR={fill_factor}."
-        )
-    elif procesadas > 0:
-        mensaje = (
-            f"Rebuild completado con advertencias. "
-            f"{procesadas}/{total} tablas OK, {len(tablas_error)} con errores."
-        )
-    else:
-        mensaje = f"Rebuild falló. No se procesó ninguna tabla correctamente."
-
-    return {
-        'exito': exito or procesadas > 0,
-        'tablas_procesadas': procesadas,
-        'tablas_con_error': tablas_error,
-        'mensaje': mensaje
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -339,9 +319,8 @@ def procesar_comando_fill_factor(texto, numero_remoto, numero_destino_configurad
 
 def verificar_fragmentacion(umbral=30):
     """
-    Verifica el nivel de fragmentación de los índices en Bibliouni.
-    Usa sys.dm_db_index_physical_stats para obtener el porcentaje de
-    fragmentación promedio de cada índice.
+    Verifica el nivel de fragmentación de los índices en Bibliouni
+    mediante el Stored Procedure dbo.sp_verificar_fragmentacion.
 
     Args:
         umbral (int): Porcentaje mínimo de fragmentación para considerar
@@ -365,37 +344,18 @@ def verificar_fragmentacion(umbral=30):
     try:
         with pyodbc.connect(conn_str, timeout=30) as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT
-                    t.name AS tabla,
-                    i.name AS indice,
-                    ROUND(ps.avg_fragmentation_in_percent, 2) AS fragmentacion,
-                    ps.page_count AS paginas
-                FROM sys.dm_db_index_physical_stats(
-                    DB_ID(), NULL, NULL, NULL, 'LIMITED'
-                ) ps
-                INNER JOIN sys.tables t ON ps.object_id = t.object_id
-                INNER JOIN sys.indexes i ON ps.object_id = i.object_id
-                    AND ps.index_id = i.index_id
-                WHERE ps.index_id > 0
-                  AND ps.page_count > 0
-                ORDER BY ps.avg_fragmentation_in_percent DESC
-            """)
+            # Llamar al Stored Procedure con el umbral como parámetro
+            cursor.execute("{CALL dbo.sp_verificar_fragmentacion (?)}", umbral)
 
-            todos = []
             fragmentadas = []
             for row in cursor.fetchall():
-                entrada = {
-                    'tabla': row[0],
-                    'indice': row[1] or '(sin nombre)',
+                fragmentadas.append({
+                    'tabla':         row[0],
+                    'indice':        row[1] or '(sin nombre)',
                     'fragmentacion': float(row[2]),
-                    'paginas': int(row[3])
-                }
-                todos.append(entrada)
-                if entrada['fragmentacion'] >= umbral:
-                    fragmentadas.append(entrada)
+                    'paginas':       int(row[3])
+                })
 
-            total = len(todos)
             hay_alerta = len(fragmentadas) > 0
 
             if hay_alerta:
@@ -411,23 +371,23 @@ def verificar_fragmentacion(umbral=30):
 
             print(f"[DEBUG Fragmentación] {mensaje}")
             return {
-                'hay_alerta': hay_alerta,
-                'umbral': umbral,
+                'hay_alerta':          hay_alerta,
+                'umbral':              umbral,
                 'tablas_fragmentadas': fragmentadas,
-                'total_indices': total,
-                'mensaje': mensaje,
-                'fecha': fecha
+                'total_indices':       len(fragmentadas),
+                'mensaje':             mensaje,
+                'fecha':               fecha
             }
 
     except Exception as e:
         print(f"[ERROR Fragmentación] {e}")
         return {
-            'hay_alerta': False,
-            'umbral': umbral,
+            'hay_alerta':          False,
+            'umbral':              umbral,
             'tablas_fragmentadas': [],
-            'total_indices': 0,
-            'mensaje': f'Error al verificar fragmentación: {str(e)}',
-            'fecha': fecha
+            'total_indices':       0,
+            'mensaje':             f'Error al ejecutar sp_verificar_fragmentacion: {str(e)}',
+            'fecha':               fecha
         }
 
 

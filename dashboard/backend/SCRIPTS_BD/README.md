@@ -79,3 +79,47 @@ GO
 
 EXEC dbo.sp_EjecutarBackupBibliouni @DatabaseName = 'Bibliouni';
 ```
+
+---
+
+## Scripts de Factor de Llenado y Fragmentación
+
+3. `03_sp_ejecutar_rebuild_indices.sql` - Crea `sp_ejecutar_rebuild_indices` en `Bibliouni`.
+4. `04_sp_verificar_fragmentacion.sql` - Crea `sp_verificar_fragmentacion` en `Bibliouni`.
+
+### sp_ejecutar_rebuild_indices
+
+Reconstruye los índices de todas las tablas de usuario en `Bibliouni` con el fill factor indicado.
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_ejecutar_rebuild_indices @fill_factor = 80;
+```
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripcion |
+|---------|------|-------------|
+| `tablas_procesadas` | `INT` | Cantidad de tablas procesadas exitosamente |
+| `tablas_con_error` | `INT` | Cantidad de tablas que fallaron |
+| `fill_factor_aplicado` | `INT` | Fill factor usado en el rebuild |
+
+### sp_verificar_fragmentacion
+
+Retorna los índices de `Bibliouni` cuya fragmentación supera el umbral indicado.
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_verificar_fragmentacion @umbral = 30;
+```
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripcion |
+|---------|------|-------------|
+| `tabla` | `NVARCHAR` | Nombre de la tabla |
+| `indice` | `NVARCHAR` | Nombre del índice |
+| `fragmentacion` | `DECIMAL` | Porcentaje de fragmentación promedio |
+| `paginas` | `BIGINT` | Cantidad de páginas del índice |
