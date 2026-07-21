@@ -51,14 +51,8 @@ def get_tables_info():
         with pyodbc.connect(conn_str, timeout=10) as conn:
             cursor = conn.cursor()
             
-            # Obtener nombres de tablas de usuario
-            cursor.execute("""
-                SELECT TABLE_NAME 
-                FROM INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_TYPE = 'BASE TABLE' 
-                AND TABLE_SCHEMA = 'dbo'
-                ORDER BY TABLE_NAME
-            """)
+            # Obtener nombres de tablas de usuario mediante Stored Procedure
+            cursor.execute("EXEC dbo.sp_ObtenerInfoTablas")
             
             tables = [row[0] for row in cursor.fetchall()]
             

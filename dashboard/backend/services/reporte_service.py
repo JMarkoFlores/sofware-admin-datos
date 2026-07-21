@@ -1,14 +1,18 @@
 """
 Servicio para generación de reportes detallados en PDF para WhatsApp.
+============================================================
+
+La lógica de consultas se ejecuta en SQL Server mediante Stored Procedures.
+Este servicio solo formatea los datos y genera el PDF.
 """
 
 import os
 import re
+import pyodbc
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import has_app_context
-from sqlalchemy import desc, func
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -17,12 +21,31 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-from models import Autor, Categoria, Devolucion, Libro, Lector, Multa, Prestamo, db
+from config.settings import Config
 
 REPORTS_OUTPUT_DIR = os.getenv(
     'REPORTS_OUTPUT_DIR',
     os.path.join(os.path.dirname(os.path.dirname(__file__)), 'reports')
 )
+
+
+def _get_bibliouni_connection_string():
+    """Cadena de conexión pyodbc a Bibliouni."""
+    if Config.BIBLIOUNI_TRUSTED == 'yes':
+        return (
+            f"DRIVER={{{Config.BIBLIOUNI_DRIVER}}};"
+            f"SERVER={Config.BIBLIOUNI_SERVER};"
+            f"DATABASE=Bibliouni;"
+            f"Trusted_Connection=yes;"
+        )
+    else:
+        return (
+            f"DRIVER={{{Config.BIBLIOUNI_DRIVER}}};"
+            f"SERVER={Config.BIBLIOUNI_SERVER};"
+            f"DATABASE=Bibliouni;"
+            f"UID={Config.BIBLIOUNI_USER};"
+            f"PWD={Config.BIBLIOUNI_PASSWORD};"
+        )
 
 
 def _slugify(text):
@@ -100,119 +123,93 @@ def _crear_tabla(datos, encabezados, anchos=None):
     return table
 
 
-def libros_mas_prestados(limit=5):
-    """Libros más prestados."""
-    return (
-        db.session.query(Libro.titulo, func.count(Prestamo.id).label('total'))
-        .join(Prestamo, Libro.id == Prestamo.libro_id)
-        .group_by(Libro.id, Libro.titulo)
-        .order_by(desc('total'))
-        .limit(limit)
-        .all()
-    )
+def estadisticas_generales():
+    """Estadísticas generales de la biblioteca - llama a SP."""
+    conn_str = _get_bibliouni_connection_string()
+    try:
+        with pyodbc.connect(conn_str, timeout=15) as conn:
+            cursor = conn.cursor()
+            cursor.execute("EXEC Bibliouni.dbo.sp_reporte_estadisticas_generales")
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'total_libros': row.total_libros or 0,
+                    'libros_disponibles': row.libros_disponibles or 0,
+                    'total_autores': row.total_autores or 0,
+                    'total_categorias': row.total_categorias or 0,
+                    'total_lectores': row.total_lectores or 0,
+                    'prestamos_activos': row.prestamos_activos or 0,
+                    'multas_pendientes': row.multas_pendientes or 0,
+                    'monto_multas_pendientes': float(row.monto_multas_pendientes or 0)
+                }
+            return {
+                'total_libros': 0, 'libros_disponibles': 0, 'total_autores': 0,
+                'total_categorias': 0, 'total_lectores': 0, 'prestamos_activos': 0,
+                'multas_pendientes': 0, 'monto_multas_pendientes': 0.0
+            }
+    except Exception as e:
+        print(f"[ERROR] Error ejecutando sp_reporte_estadisticas_generales: {e}")
+        return {
+            'total_libros': 0, 'libros_disponibles': 0, 'total_autores': 0,
+            'total_categorias': 0, 'total_lectores': 0, 'prestamos_activos': 0,
+            'multas_pendientes': 0, 'monto_multas_pendientes': 0.0
+        }
 
 
-def libros_disponibles(limit=20):
-    """Lista detallada de libros disponibles."""
-    return (
-        db.session.query(Libro)
-        .filter(Libro.ejemplares_disponibles > 0)
-        .order_by(Libro.titulo)
-        .limit(limit)
-        .all()
-    )
-
-
-def lectores_activos(limit=20):
-    """Lista detallada de lectores activos."""
-    return (
-        db.session.query(Lector)
-        .filter(Lector.activo == True)
-        .order_by(Lector.apellidos, Lector.nombres)
-        .limit(limit)
-        .all()
-    )
-
-
-def prestamos_activos(limit=20):
-    """Detalle de préstamos activos."""
-    return (
-        db.session.query(Prestamo)
-        .filter(Prestamo.estado == 'activo')
-        .order_by(Prestamo.fecha_devolucion_esperada)
-        .limit(limit)
-        .all()
-    )
+def libros_mas_prestados(limit=20):
+    """Libros más prestados - llama a SP."""
+    conn_str = _get_bibliouni_connection_string()
+    try:
+        with pyodbc.connect(conn_str, timeout=15) as conn:
+            cursor = conn.cursor()
+            cursor.execute("EXEC Bibliouni.dbo.sp_reporte_libros_mas_prestados @top_n = ?", (limit,))
+            rows = cursor.fetchall()
+            return [(row.titulo_libro, row.total_prestamos) for row in rows]
+    except Exception as e:
+        print(f"[ERROR] Error ejecutando sp_reporte_libros_mas_prestados: {e}")
+        return []
 
 
 def multas_pendientes(limit=20):
-    """Detalle de multas pendientes."""
-    return (
-        db.session.query(Multa)
-        .filter(Multa.pagada == False)
-        .order_by(desc(Multa.monto))
-        .limit(limit)
-        .all()
-    )
+    """Multas pendientes - llama a SP."""
+    conn_str = _get_bibliouni_connection_string()
+    try:
+        with pyodbc.connect(conn_str, timeout=15) as conn:
+            cursor = conn.cursor()
+            cursor.execute("EXEC Bibliouni.dbo.sp_reporte_multas_pendientes @top_n = ?", (limit,))
+            rows = cursor.fetchall()
+            return [(row.lector, float(row.monto), row.motivo) for row in rows]
+    except Exception as e:
+        print(f"[ERROR] Error ejecutando sp_reporte_multas_pendientes: {e}")
+        return []
 
 
 def prestamos_vencidos(limit=20):
-    """Préstamos vencidos."""
-    hoy = datetime.utcnow().date()
-    return (
-        db.session.query(Prestamo)
-        .filter(
-            Prestamo.estado == 'activo',
-            Prestamo.fecha_devolucion_esperada < hoy
-        )
-        .order_by(desc(Prestamo.fecha_devolucion_esperada))
-        .limit(limit)
-        .all()
-    )
+    """Préstamos vencidos - llama a SP."""
+    conn_str = _get_bibliouni_connection_string()
+    try:
+        with pyodbc.connect(conn_str, timeout=15) as conn:
+            cursor = conn.cursor()
+            cursor.execute("EXEC Bibliouni.dbo.sp_reporte_prestamos_vencidos @top_n = ?", (limit,))
+            rows = cursor.fetchall()
+            return [(row.lector, row.libro, row.vencido_desde) for row in rows]
+    except Exception as e:
+        print(f"[ERROR] Error ejecutando sp_reporte_prestamos_vencidos: {e}")
+        return []
 
 
 def libros_dañados_recientes(dias=30):
-    """Libros reportados como dañados en los últimos N días."""
-    fecha_limite = datetime.utcnow() - timedelta(days=dias)
-    return (
-        db.session.query(
-            Libro.titulo,
-            func.count(Devolucion.id).label('total_danios')
-        )
-        .join(Devolucion, Devolucion.prestamo_id == Prestamo.id)
-        .join(Prestamo, Prestamo.libro_id == Libro.id)
-        .filter(
-            Devolucion.estado_libro == 'dañado',
-            Devolucion.created_at >= fecha_limite
-        )
-        .group_by(Libro.id, Libro.titulo)
-        .order_by(desc('total_danios'))
-        .all()
-    )
-
-
-def estadisticas_generales():
-    """Estadísticas generales de la biblioteca."""
-    total_libros = db.session.query(func.count(Libro.id)).scalar() or 0
-    libros_disponibles_total = db.session.query(func.sum(Libro.ejemplares_disponibles)).scalar() or 0
-    total_autores = db.session.query(func.count(Autor.id)).scalar() or 0
-    total_categorias = db.session.query(func.count(Categoria.id)).scalar() or 0
-    total_lectores = db.session.query(func.count(Lector.id)).scalar() or 0
-    prestamos_total = db.session.query(func.count(Prestamo.id)).filter(Prestamo.estado == 'activo').scalar() or 0
-    multas = {
-        'cantidad': db.session.query(func.count(Multa.id)).filter(Multa.pagada == False).scalar() or 0,
-        'monto_total': float(db.session.query(func.sum(Multa.monto)).filter(Multa.pagada == False).scalar() or 0)
-    }
-    return {
-        'total_libros': total_libros,
-        'libros_disponibles': libros_disponibles_total,
-        'total_autores': total_autores,
-        'total_categorias': total_categorias,
-        'total_lectores': total_lectores,
-        'prestamos_activos': prestamos_total,
-        'multas_pendientes': multas['cantidad'],
-        'monto_multas_pendientes': multas['monto_total']
-    }
+    """Libros dañados recientes - llama a SP."""
+    conn_str = _get_bibliouni_connection_string()
+    try:
+        with pyodbc.connect(conn_str, timeout=15) as conn:
+            cursor = conn.cursor()
+            cursor.execute("EXEC Bibliouni.dbo.sp_reporte_libros_danhados @dias = ?", (dias,))
+            rows = cursor.fetchall()
+            return [(row.titulo_libro, row.total_danios) for row in rows]
+    except Exception as e:
+        print(f"[ERROR] Error ejecutando sp_reporte_libros_danhados: {e}")
+        return []
 
 
 def _generar_pdf_por_tipo(report_type):
@@ -242,7 +239,7 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE LIBROS MÁS PRESTADOS'
         contenido = []
         if libros:
-            datos_tabla = [[libro.titulo, str(libro.total)] for libro in libros]
+            datos_tabla = [[titulo_libro, str(total)] for titulo_libro, total in libros]
             tabla = _crear_tabla(datos_tabla, ['Título del Libro', 'Total Préstamos'], [4*inch, 1.5*inch])
             contenido.append(tabla)
         else:
@@ -315,10 +312,7 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE MULTAS PENDIENTES'
         contenido = []
         if multas:
-            datos_tabla = []
-            for multa in multas:
-                lector = f"{multa.lector.nombres} {multa.lector.apellidos}" if multa.lector else 'Sin lector'
-                datos_tabla.append([lector, f"S/. {float(multa.monto):.2f}", multa.motivo or '-'])
+            datos_tabla = [[lector, f"S/. {monto:.2f}", motivo or '-'] for lector, monto, motivo in multas]
             tabla = _crear_tabla(datos_tabla, ['Lector', 'Monto', 'Motivo'], [2*inch, 1.2*inch, 2.8*inch])
             contenido.append(tabla)
         else:
@@ -331,12 +325,7 @@ def _generar_pdf_por_tipo(report_type):
         titulo = 'REPORTE DE PRÉSTAMOS VENCIDOS'
         contenido = []
         if vencidos:
-            datos_tabla = []
-            for prestamo in vencidos:
-                lector = f"{prestamo.lector.nombres} {prestamo.lector.apellidos}" if prestamo.lector else 'Sin lector'
-                libro = prestamo.libro.titulo if prestamo.libro else 'Sin libro'
-                fecha_vencimiento = prestamo.fecha_devolucion_esperada.strftime('%Y-%m-%d') if prestamo.fecha_devolucion_esperada else '-'
-                datos_tabla.append([lector, libro, fecha_vencimiento])
+            datos_tabla = [[lector, libro, fecha_vencimiento] for lector, libro, fecha_vencimiento in vencidos]
             tabla = _crear_tabla(datos_tabla, ['Lector', 'Libro', 'Vencido Desde'], [2*inch, 2.5*inch, 1.5*inch])
             contenido.append(tabla)
         else:
