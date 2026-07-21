@@ -2693,167 +2693,118 @@ function Disparador() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Fila 5: Info Seguridad Login - Disparador Seguridad Login */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "20px",
-            marginBottom: "20px",
-          }}
-        >
-          <div className="m-table-card">
-            <div
-              style={{
-                padding: "16px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-              }}
-            >
-              <FiAlertCircle size={18} style={{ color: "#f59e0b" }} />
-              <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
-                Información Seguridad Login
-              </h3>
-            </div>
-            <div style={{ padding: "20px" }}>
-              <p
-                style={{
-                  margin: "0 0 8px 0",
-                  color: "#475569",
-                  fontSize: "14px",
-                }}
-              >
-                Monitorea intentos fallidos de inicio de sesión en SQL Server.
-                Cuando un usuario falla más de 2 veces, envía una alerta por
-                WhatsApp y espera tu confirmación para bloquear la cuenta.
-              </p>
-              <ul
-                style={{
-                  margin: 0,
-                  paddingLeft: "20px",
-                  color: "#64748b",
-                  fontSize: "13px",
-                }}
-              >
-                <li style={{ marginBottom: "4px" }}>
-                  Verificación automática cada 5 minutos
-                </li>
-                <li style={{ marginBottom: "4px" }}>
-                  Alerta por WhatsApp cuando un usuario falla más de 2 veces
-                </li>
-                <li style={{ marginBottom: "4px" }}>
-                  Responde{" "}
-                  <code
-                    style={{
-                      background: "rgba(245,158,11,0.1)",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    BLOQUEA
-                  </code>{" "}
-                  para deshabilitar la cuenta
-                </li>
-                <li>
-                  No bloquea automáticamente, requiere confirmación humana
-                </li>
-              </ul>
-            </div>
+      {/* Fila 5: Info Seguridad Login - Monitoreo Seguridad Login */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        <div className="m-table-card">
+          <div
+            style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <FiAlertCircle size={18} style={{ color: "#f59e0b" }} />
+            <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
+              Información Seguridad Login
+            </h3>
           </div>
-
-          <div className="m-table-card">
-            <div
+          <div style={{ padding: "20px" }}>
+            <p
               style={{
-                padding: "16px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
+                margin: "0 0 8px 0",
+                color: "#475569",
+                fontSize: "14px",
               }}
             >
-              <FiAlertCircle size={18} style={{ color: "#f59e0b" }} />
-              <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
-                Monitoreo Seguridad Login
-              </h3>
-              <span
-                className={`m-badge ${loginSecurityRunning ? "m-badge-paid" : "m-badge-pending"}`}
-                style={{ marginLeft: "auto" }}
-              >
-                {loginSecurityRunning ? (
-                  <FiCheckCircle size={11} />
-                ) : (
-                  <FiAlertCircle size={11} />
-                )}
-                {loginSecurityRunning ? " En ejecución" : " Detenido"}
-              </span>
-            </div>
-            <div style={{ padding: "20px" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                  gap: "16px",
-                  marginBottom: "16px",
-                }}
-              >
-                <div className="m-form-group" style={{ margin: 0 }}>
-                  <label>
-                    <FiPhone size={13} /> Número de Destino
-                  </label>
-                  {loginSecurityRunning ? (
-                    <span
-                      style={{
-                        display: "block",
-                        padding: "10px 14px",
-                        background: "#f1f5f9",
-                        borderRadius: "8px",
-                        color: "#475569",
-                        fontWeight: "500",
-                      }}
-                    >
-                      {loginSecurityPhone}
-                    </span>
-                  ) : (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "4px",
-                      }}
-                    >
-                      <input
-                        ref={loginSecurityInputRef}
-                        type="text"
-                        value={loginSecurityPhone}
-                        onChange={handleLoginSecurityInputChange}
-                        onBlur={handleLoginSecurityInputBlur}
-                        onFocus={handleLoginSecurityInputFocus}
-                        placeholder="519XXXXXXXX"
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: "14px",
-                          borderRadius: "8px",
-                          border: loginSecurityError
-                            ? "1px solid #ef4444"
-                            : "1px solid #e2e8f0",
-                          outline: "none",
-                          transition: "border-color 0.2s",
-                        }}
-                      />
-                      <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-                        Ej: 51952310138 (11 dígitos)
-                      </span>
-                    </div>
-                  )}
-                </div>
+              Monitorea intentos fallidos de inicio de sesión en SQL Server.
+              Cuando un usuario falla más de 2 veces, envía una alerta por
+              WhatsApp y espera tu confirmación para bloquear la cuenta.
+            </p>
+            <ul
+              style={{
+                margin: 0,
+                paddingLeft: "20px",
+                color: "#64748b",
+                fontSize: "13px",
+              }}
+            >
+              <li style={{ marginBottom: "4px" }}>
+                Verificación automática cada 1 minuto
+              </li>
+              <li style={{ marginBottom: "4px" }}>
+                Alerta por WhatsApp cuando un usuario falla más de 2 veces
+              </li>
+              <li style={{ marginBottom: "4px" }}>
+                Responde{" "}
+                <code
+                  style={{
+                    background: "rgba(245,158,11,0.1)",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  BLOQUEA
+                </code>{" "}
+                para deshabilitar la cuenta
+              </li>
+              <li>
+                No bloquea automáticamente, requiere confirmación humana
+              </li>
+            </ul>
+          </div>
+        </div>
 
-                <div className="m-form-group" style={{ margin: 0 }}>
-                  <label>
-                    <FiClock size={13} /> Última Alerta Emitida
-                  </label>
+        <div className="m-table-card">
+          <div
+            style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <FiAlertCircle size={18} style={{ color: "#f59e0b" }} />
+            <h3 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>
+              Monitoreo Seguridad Login
+            </h3>
+            <span
+              className={`m-badge ${loginSecurityRunning ? "m-badge-paid" : "m-badge-pending"}`}
+              style={{ marginLeft: "auto" }}
+            >
+              {loginSecurityRunning ? (
+                <FiCheckCircle size={11} />
+              ) : (
+                <FiAlertCircle size={11} />
+              )}
+              {loginSecurityRunning ? " En ejecución" : " Detenido"}
+            </span>
+          </div>
+          <div style={{ padding: "20px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gap: "16px",
+                marginBottom: "16px",
+              }}
+            >
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label>
+                  <FiPhone size={13} /> Número de Destino
+                </label>
+                {loginSecurityRunning ? (
                   <span
                     style={{
                       display: "block",
@@ -2864,70 +2815,119 @@ function Disparador() {
                       fontWeight: "500",
                     }}
                   >
-                    {loginSecurityStatus.last_alert?.timestamp ||
-                      loginSecurityStatus.last_check ||
-                      "Nunca"}
+                    {loginSecurityPhone}
                   </span>
-                </div>
-              </div>
-
-              {loginSecurityError && (
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    background: "#fef2f2",
-                    border: "1px solid #fee2e2",
-                    borderRadius: "8px",
-                    color: "#dc2626",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <strong>Error:</strong> {loginSecurityError}
-                </div>
-              )}
-
-              <div
-                className="m-form-actions"
-                style={{ justifyContent: "flex-start" }}
-              >
-                {loginSecurityRunning ? (
-                  <button
-                    className="m-btn-danger"
-                    onClick={handleLoginSecurityStop}
-                    disabled={loginSecurityLoading}
-                  >
-                    {loginSecurityLoading ? (
-                      <FiRefreshCw
-                        size={14}
-                        style={{ animation: "spin 1s linear infinite" }}
-                      />
-                    ) : (
-                      <FiSquare size={14} />
-                    )}
-                    {loginSecurityLoading
-                      ? " Deteniendo..."
-                      : " Detener Monitoreo"}
-                  </button>
                 ) : (
-                  <button
-                    className="m-btn-primary"
-                    onClick={handleLoginSecurityStart}
-                    disabled={loginSecurityLoading}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
                   >
-                    {loginSecurityLoading ? (
-                      <FiRefreshCw
-                        size={14}
-                        style={{ animation: "spin 1s linear infinite" }}
-                      />
-                    ) : (
-                      <FiPlay size={14} />
-                    )}
-                    {loginSecurityLoading
-                      ? " Iniciando..."
-                      : " Iniciar Monitoreo"}
-                  </button>
+                    <input
+                      ref={loginSecurityInputRef}
+                      type="text"
+                      value={loginSecurityPhone}
+                      onChange={handleLoginSecurityInputChange}
+                      onBlur={handleLoginSecurityInputBlur}
+                      onFocus={handleLoginSecurityInputFocus}
+                      placeholder="519XXXXXXXX"
+                      style={{
+                        padding: "10px 14px",
+                        fontSize: "14px",
+                        borderRadius: "8px",
+                        border: loginSecurityError
+                          ? "1px solid #ef4444"
+                          : "1px solid #e2e8f0",
+                        outline: "none",
+                        transition: "border-color 0.2s",
+                      }}
+                    />
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      Ej: 51952310138 (11 dígitos)
+                    </span>
+                  </div>
                 )}
               </div>
+
+              <div className="m-form-group" style={{ margin: 0 }}>
+                <label>
+                  <FiClock size={13} /> Última Alerta Emitida
+                </label>
+                <span
+                  style={{
+                    display: "block",
+                    padding: "10px 14px",
+                    background: "#f1f5f9",
+                    borderRadius: "8px",
+                    color: "#475569",
+                    fontWeight: "500",
+                  }}
+                >
+                  {loginSecurityStatus.last_alert?.timestamp ||
+                    loginSecurityStatus.last_check ||
+                    "Nunca"}
+                </span>
+              </div>
+            </div>
+
+            {loginSecurityError && (
+              <div
+                style={{
+                  padding: "12px 16px",
+                  background: "#fef2f2",
+                  border: "1px solid #fee2e2",
+                  borderRadius: "8px",
+                  color: "#dc2626",
+                  marginBottom: "16px",
+                }}
+              >
+                <strong>Error:</strong> {loginSecurityError}
+              </div>
+            )}
+
+            <div
+              className="m-form-actions"
+              style={{ justifyContent: "flex-start" }}
+            >
+              {loginSecurityRunning ? (
+                <button
+                  className="m-btn-danger"
+                  onClick={handleLoginSecurityStop}
+                  disabled={loginSecurityLoading}
+                >
+                  {loginSecurityLoading ? (
+                    <FiRefreshCw
+                      size={14}
+                      style={{ animation: "spin 1s linear infinite" }}
+                    />
+                  ) : (
+                    <FiSquare size={14} />
+                  )}
+                  {loginSecurityLoading
+                    ? " Deteniendo..."
+                    : " Detener Monitoreo"}
+                </button>
+              ) : (
+                <button
+                  className="m-btn-primary"
+                  onClick={handleLoginSecurityStart}
+                  disabled={loginSecurityLoading}
+                >
+                  {loginSecurityLoading ? (
+                    <FiRefreshCw
+                      size={14}
+                      style={{ animation: "spin 1s linear infinite" }}
+                    />
+                  ) : (
+                    <FiPlay size={14} />
+                  )}
+                  {loginSecurityLoading
+                    ? " Iniciando..."
+                    : " Iniciar Monitoreo"}
+                </button>
+              )}
             </div>
           </div>
         </div>

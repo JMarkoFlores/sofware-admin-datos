@@ -361,8 +361,8 @@ def send_login_alert(username, attempts, destination):
 
 
 def disable_login(username):
-    """Deshabilita un login de SQL Server."""
-    print(f"[DEBUG SEGURO] Intentando deshabilitar login {username} en SQL Server...")
+    """Deshabilita un login de SQL Server usando el Procedimiento Almacenado sp_BloquearUsuarioLogin."""
+    print(f"[DEBUG SEGURO] Intentando deshabilitar login {username} en SQL Server usando sp_BloquearUsuarioLogin...")
     conn_str = _get_sql_server_connection_string()
 
     try:
@@ -370,49 +370,17 @@ def disable_login(username):
             conn.autocommit = True
             cursor = conn.cursor()
 
-            # Validar que el login existe antes de intentar deshabilitarlo
-            print(f"[DEBUG SEGURO] Verificando si el login {username} existe en SQL Server...")
-            cursor.execute("""
-                SELECT name 
-                FROM sys.server_principals 
-                WHERE name = ? AND type IN ('S', 'U')
-            """, (username,))
-
-            if not cursor.fetchone():
-                print(f"[DEBUG SEGURO] [ERROR] El login {username} NO existe en SQL Server")
-                return {
-                    'exito': False,
-                    'mensaje': f'El login {username} no existe en SQL Server'
-                }
-            print(f"[DEBUG SEGURO] [OK] Login {username} encontrado")
-
-            # Deshabilitar el login mediante el Stored Procedure
-            print(f"[DEBUG SEGURO] Ejecutando: EXEC master.dbo.sp_DeshabilitarLogin '{username}'")
-            cursor.execute("EXEC master.dbo.sp_DeshabilitarLogin ?", (username,))
-            row = cursor.fetchone()
-            if row:
-                exito = row[0]
-                mensaje = row[1]
-                if not exito:
-                    print(f"[DEBUG SEGURO] [ERROR] {mensaje}")
-                    return {
-                        'exito': False,
-                        'mensaje': mensaje
-                    }
-                print(f"[DEBUG SEGURO] [OK] {mensaje}")
-            else:
-                print(f"[DEBUG SEGURO] [ERROR] No se obtuvo respuesta del SP")
-                return {
-                    'exito': False,
-                    'mensaje': 'No se obtuvo respuesta del procedimiento almacenado'
-                }
+            # Ejecutar el Procedimiento Almacenado
+            print(f"[DEBUG SEGURO] Ejecutando: EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;")
+            cursor.execute("EXEC dbo.sp_BloquearUsuarioLogin @LoginName = ?;", (username,))
+            print(f"[DEBUG SEGURO] [OK] Procedimiento Almacenado ejecutado exitosamente")
 
             # Registrar en auditoría
             try:
                 log_auditoria(
                     'BLOQUEO',
                     'Seguridad Login',
-                    f'Login {username} deshabilitado exitosamente',
+                    f'Login {username} deshabilitado exitosamente via sp_BloquearUsuarioLogin',
                     usuario='sistema',
                     resultado='Éxito'
                 )
@@ -422,7 +390,7 @@ def disable_login(username):
 
             return {
                 'exito': True,
-                'mensaje': f'Login {username} deshabilitado exitosamente'
+                'mensaje': f'Login {username} deshabilitado exitosamente via Procedimiento Almacenado'
             }
 
     except Exception as e:
@@ -433,7 +401,7 @@ def disable_login(username):
             log_auditoria(
                 'ERROR',
                 'Seguridad Login',
-                f'Error al bloquear login {username}: {str(e)}',
+                f'Error al bloquear login {username} via sp_BloquearUsuarioLogin: {str(e)}',
                 usuario='sistema',
                 resultado='Fallo'
             )
@@ -441,7 +409,7 @@ def disable_login(username):
             print(f"[DEBUG SEGURO] ERROR adicional al registrar auditoría: {e_audit}")
         return {
             'exito': False,
-            'mensaje': f'Error al bloquear login: {str(e)}'
+            'mensaje': f'Error al bloquear login via Procedimiento Almacenado: {str(e)}'
         }
 
 

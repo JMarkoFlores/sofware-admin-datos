@@ -95,7 +95,7 @@ login_security_is_running = False
 login_security_last_check = None
 login_security_last_alert = None  # Nueva variable para la última alerta
 login_security_destination = os.getenv('WHATSAPP_DESTINATION', '5190065850')
-LOGIN_CHECK_INTERVAL_MINUTES = int(os.getenv('LOGIN_CHECK_INTERVAL_MINUTES', '5'))
+LOGIN_CHECK_INTERVAL_MINUTES = int(os.getenv('LOGIN_CHECK_INTERVAL_MINUTES', '1'))
 
 
 def set_flask_app(app):
