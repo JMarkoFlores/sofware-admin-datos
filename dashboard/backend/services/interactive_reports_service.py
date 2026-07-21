@@ -163,14 +163,103 @@ O escribe "0" para cancelar."""
             }
         
         # Generar el reporte
-        respuesta = "⏳ Generando reporte, por favor espera..."
-        conv.update_state('generating_report', report_type=tipo_reporte)
+        # Si el reporte requiere parámetros, pedirlos primero
+        if tipo_reporte == 'estadisticas':
+            # Estadísticas no requiere parámetros, generar directamente
+            respuesta = "⏳ Generando reporte, por favor espera..."
+            conv.update_state('generating_report', report_type=tipo_reporte)
+            return {
+                'respuesta': respuesta,
+                'estado': 'generating_report',
+                'tipo_reporte': tipo_reporte
+            }
+        else:
+            # Pedir parámetros según el tipo de reporte
+            if tipo_reporte == 'libros_danios':
+                respuesta = """📝 *Configuración de Reporte*
+
+Reporte: Libros Dañados
+
+Por favor ingresa la cantidad de días a considerar (1-365).
+Ejemplo: 30
+
+_Envía 0 para usar el valor por defecto (30 días)_"""
+            else:
+                respuesta = """📝 *Configuración de Reporte*
+
+Reporte: """ + REPORT_TYPES[str(list(REPORT_TYPES.keys())[list(REPORT_TYPES.values()).index(next(r for r in REPORT_TYPES.values() if r['id'] == tipo_reporte))])]['nombre'] + """
+
+Por favor ingresa la cantidad de registros a mostrar (1-100).
+Ejemplo: 10
+
+_Envía 0 para usar el valor por defecto (20 registros)_"""
+            
+            conv.update_state('parametros', report_type=tipo_reporte)
+            return {
+                'respuesta': respuesta,
+                'estado': 'parametros',
+                'tipo_reporte': tipo_reporte
+            }
+    
+    # =====================================================================
+    # ESTADO: PARAMETROS (Usuario ingresando valor de parámetro)
+    # =====================================================================
+    elif estado_actual == 'parametros':
+        # Verificar si es cancelación
+        if texto_limpio in ['0', 'cancelar', 'cancel']:
+            # Usar valor por defecto
+            tipo_reporte = conv.current_report_type
+            respuesta = "⏳ Generando reporte con valores por defecto, por favor espera..."
+            conv.update_state('generating_report', report_type=tipo_reporte)
+            return {
+                'respuesta': respuesta,
+                'estado': 'generating_report',
+                'tipo_reporte': tipo_reporte
+            }
         
-        return {
-            'respuesta': respuesta,
-            'estado': 'generating_report',
-            'tipo_reporte': tipo_reporte
-        }
+        # Intentar parsear el valor ingresado
+        try:
+            valor = int(texto_limpio)
+            tipo_reporte = conv.current_report_type
+            
+            # Validar rango según el tipo
+            if tipo_reporte == 'libros_danios':
+                if valor < 1 or valor > 365:
+                    respuesta = "❌ Valor inválido. Debe estar entre 1 y 365 días. Intenta de nuevo o envía 0 para usar el valor por defecto."
+                    return {
+                        'respuesta': respuesta,
+                        'estado': 'parametros',
+                        'tipo_reporte': tipo_reporte
+                    }
+            else:
+                if valor < 1 or valor > 100:
+                    respuesta = "❌ Valor inválido. Debe estar entre 1 y 100 registros. Intenta de nuevo o envía 0 para usar el valor por defecto."
+                    return {
+                        'respuesta': respuesta,
+                        'estado': 'parametros',
+                        'tipo_reporte': tipo_reporte
+                    }
+            
+            # Guardar el parámetro en la conversación
+            if tipo_reporte == 'libros_danios':
+                conv.set_param('dias', valor)
+            else:
+                conv.set_param('limit', valor)
+            
+            respuesta = f"⏳ Generando reporte con valor {valor}, por favor espera..."
+            conv.update_state('generating_report', report_type=tipo_reporte)
+            return {
+                'respuesta': respuesta,
+                'estado': 'generating_report',
+                'tipo_reporte': tipo_reporte
+            }
+        except ValueError:
+            respuesta = "❌ Por favor ingresa un número válido. Intenta de nuevo o envía 0 para usar el valor por defecto."
+            return {
+                'respuesta': respuesta,
+                'estado': 'parametros',
+                'tipo_reporte': conv.current_report_type
+            }
     
     # =====================================================================
     # ESTADO: GENERATING_REPORT (Reporte en progreso)
@@ -222,13 +311,14 @@ O escribe "0" para cancelar."""
     }
 
 
-def generar_y_enviar_reporte(phone_number, tipo_reporte):
+def generar_y_enviar_reporte(phone_number, tipo_reporte, **params):
     """
     Genera un reporte específico y prepara el mensaje para envío.
     
     Args:
         phone_number: Número del usuario
         tipo_reporte: Tipo de reporte a generar
+        **params: Parámetros opcionales (limit, dias) - si no se proporcionan, se obtienen de la conversación
         
     Returns:
         dict: {
@@ -237,8 +327,18 @@ def generar_y_enviar_reporte(phone_number, tipo_reporte):
             'exito': bool
         }
     """
+    # Obtener parámetros de la conversación si no se proporcionan
+    if not params:
+        conv = UserConversation.get_or_create(phone_number)
+        if tipo_reporte == 'libros_danios':
+            dias = conv.get_param('dias', 30)
+            params = {'dias': dias}
+        elif tipo_reporte != 'estadisticas':
+            limit = conv.get_param('limit', 20)
+            params = {'limit': limit}
+    
     try:
-        resultado = generar_reporte(tipo_reporte)
+        resultado = generar_reporte(tipo_reporte, **params)
         
         if not resultado.get('exito'):
             return {

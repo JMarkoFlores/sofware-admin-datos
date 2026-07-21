@@ -45,6 +45,13 @@ function Reportes() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  
+  // Estado para generación de reportes PDF
+  const [reporteTipo, setReporteTipo] = useState('estadisticas')
+  const [reporteLimit, setReporteLimit] = useState(20)
+  const [reporteDias, setReporteDias] = useState(30)
+  const [generandoReporte, setGenerandoReporte] = useState(false)
+  const [reporteResultado, setReporteResultado] = useState(null)
 
   const fetchAll = () => {
     setRefreshing(true)
@@ -67,6 +74,29 @@ function Reportes() {
   }
 
   useEffect(() => { fetchAll() }, [])
+
+  const generarReportePDF = async () => {
+    setGenerandoReporte(true)
+    setReporteResultado(null)
+    
+    try {
+      const params = { tipo: reporteTipo }
+      if (reporteTipo !== 'estadisticas') {
+        if (reporteTipo === 'libros_danios') {
+          params.dias = reporteDias
+        } else {
+          params.limit = reporteLimit
+        }
+      }
+      
+      const response = await axios.post('/api/reportes/generar', params)
+      setReporteResultado(response.data)
+    } catch (error) {
+      setReporteResultado({ exito: false, mensaje: 'Error al generar reporte' })
+    } finally {
+      setGenerandoReporte(false)
+    }
+  }
 
   // Pie data: estado de multas
   const multasPieData = [
@@ -154,6 +184,88 @@ function Reportes() {
             <div className="m-kpi-label">Lectores con Multas</div>
           </div>
         </div>
+      </div>
+
+      {/* ── Generador de Reportes PDF ── */}
+      <div className="r-pdf-generator">
+        <div className="r-pdf-header">
+          <h3 className="r-pdf-title">📄 Generar Reporte PDF</h3>
+          <p className="r-pdf-subtitle">Selecciona el tipo de reporte y configura los parámetros</p>
+        </div>
+        
+        <div className="r-pdf-controls">
+          <div className="r-pdf-control">
+            <label className="r-pdf-label">Tipo de Reporte</label>
+            <select 
+              className="r-pdf-select"
+              value={reporteTipo}
+              onChange={(e) => setReporteTipo(e.target.value)}
+            >
+              <option value="estadisticas">📊 Estadísticas Generales</option>
+              <option value="libros_prestados">📚 Libros Más Prestados</option>
+              <option value="multas">💰 Multas Pendientes</option>
+              <option value="devoluciones_pendientes">⏰ Préstamos Vencidos</option>
+              <option value="libros_danios">📕 Libros Dañados</option>
+            </select>
+          </div>
+
+          {reporteTipo !== 'estadisticas' && (
+            <>
+              {reporteTipo === 'libros_danios' ? (
+                <div className="r-pdf-control">
+                  <label className="r-pdf-label">Días a considerar (1-365)</label>
+                  <input
+                    type="number"
+                    className="r-pdf-input"
+                    min="1"
+                    max="365"
+                    value={reporteDias}
+                    onChange={(e) => setReporteDias(parseInt(e.target.value) || 30)}
+                  />
+                </div>
+              ) : (
+                <div className="r-pdf-control">
+                  <label className="r-pdf-label">Cantidad de registros (1-100)</label>
+                  <input
+                    type="number"
+                    className="r-pdf-input"
+                    min="1"
+                    max="100"
+                    value={reporteLimit}
+                    onChange={(e) => setReporteLimit(parseInt(e.target.value) || 20)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          <button
+            className="r-pdf-btn"
+            onClick={generarReportePDF}
+            disabled={generandoReporte}
+          >
+            {generandoReporte ? 'Generando...' : '📥 Generar PDF'}
+          </button>
+        </div>
+
+        {reporteResultado && (
+          <div className={`r-pdf-result ${reporteResultado.exito ? 'success' : 'error'}`}>
+            {reporteResultado.exito ? (
+              <>
+                <span className="r-pdf-result-icon">✅</span>
+                <span>{reporteResultado.mensaje}</span>
+                {reporteResultado.pdf_path && (
+                  <span className="r-pdf-path">{reporteResultado.pdf_path}</span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="r-pdf-result-icon">❌</span>
+                <span>{reporteResultado.mensaje}</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Charts Grid ── */}

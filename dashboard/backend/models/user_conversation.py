@@ -69,3 +69,33 @@ class UserConversation(Base):
         self.last_message_time = datetime.utcnow()
         self.context_data = None
         db.session.commit()
+
+    def set_param(self, key, value):
+        """Guarda un parámetro en el context_data (JSON)."""
+        import json
+        from models.base import db
+        
+        # Parsear context_data existente o crear nuevo dict
+        context = {}
+        if self.context_data:
+            try:
+                context = json.loads(self.context_data)
+            except:
+                context = {}
+        
+        context[key] = value
+        self.context_data = json.dumps(context)
+        db.session.commit()
+
+    def get_param(self, key, default=None):
+        """Obtiene un parámetro del context_data (JSON)."""
+        import json
+        
+        if not self.context_data:
+            return default
+        
+        try:
+            context = json.loads(self.context_data)
+            return context.get(key, default)
+        except:
+            return default

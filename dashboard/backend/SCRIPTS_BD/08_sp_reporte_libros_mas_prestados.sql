@@ -1,5 +1,5 @@
 -- ============================================================
--- Script 06: Stored Procedure para Reporte de Libros Más Prestados
+-- Script 08: Stored Procedure para Reporte de Libros Más Prestados
 -- Base de datos: Bibliouni
 -- Ejecutar en: SQL Server Management Studio (SSMS)
 -- ============================================================

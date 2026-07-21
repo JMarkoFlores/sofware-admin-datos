@@ -1,5 +1,5 @@
 -- ============================================================
--- Script 07: Stored Procedure para Reporte de Multas Pendientes
+-- Script 09: Stored Procedure para Reporte de Multas Pendientes
 -- Base de datos: Bibliouni
 -- Ejecutar en: SQL Server Management Studio (SSMS)
 -- ============================================================

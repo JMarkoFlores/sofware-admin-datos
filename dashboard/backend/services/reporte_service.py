@@ -215,9 +215,13 @@ def libros_dañados_recientes(dias=30):
         return []
 
 
-def _generar_pdf_por_tipo(report_type):
+def _generar_pdf_por_tipo(report_type, **params):
     if not has_app_context():
         raise RuntimeError('Se requiere un contexto de Flask para generar reportes PDF')
+    
+    # Extraer parámetros con valores por defecto
+    limit = params.get('limit', 20)
+    dias = params.get('dias', 30)
 
     if report_type == 'estadisticas':
         stats = estadisticas_generales()
@@ -241,7 +245,7 @@ def _generar_pdf_por_tipo(report_type):
         return _crear_pdf_reporte(titulo, contenido), titulo, datos_tabla
 
     if report_type == 'libros_prestados':
-        libros = libros_mas_prestados(20)
+        libros = libros_mas_prestados(limit)
         titulo = 'REPORTE DE LIBROS MÁS PRESTADOS'
         contenido = []
         if libros:
@@ -314,7 +318,7 @@ def _generar_pdf_por_tipo(report_type):
         return _crear_pdf_reporte(titulo, contenido), titulo, contenido
 
     if report_type == 'multas':
-        multas = multas_pendientes(20)
+        multas = multas_pendientes(limit)
         titulo = 'REPORTE DE MULTAS PENDIENTES'
         contenido = []
         if multas:
@@ -327,7 +331,7 @@ def _generar_pdf_por_tipo(report_type):
         return _crear_pdf_reporte(titulo, contenido), titulo, contenido
 
     if report_type == 'devoluciones_pendientes':
-        vencidos = prestamos_vencidos(20)
+        vencidos = prestamos_vencidos(limit)
         titulo = 'REPORTE DE PRÉSTAMOS VENCIDOS'
         contenido = []
         if vencidos:
@@ -340,7 +344,7 @@ def _generar_pdf_por_tipo(report_type):
         return _crear_pdf_reporte(titulo, contenido), titulo, contenido
 
     if report_type == 'libros_danios':
-        datos = libros_dañados_recientes(30)
+        datos = libros_dañados_recientes(dias)
         titulo = 'REPORTE DE LIBROS DAÑADOS'
         contenido = []
         if datos:
@@ -355,15 +359,20 @@ def _generar_pdf_por_tipo(report_type):
     return None, None, None
 
 
-def generar_reporte(report_type):
-    """Genera un PDF detallado y devuelve la ruta del archivo."""
+def generar_reporte(report_type, **params):
+    """Genera un PDF detallado y devuelve la ruta del archivo.
+    
+    Args:
+        report_type: Tipo de reporte
+        **params: Parámetros opcionales (limit, dias)
+    """
     try:
         if not has_app_context():
             from app import app as flask_app
             with flask_app.app_context():
-                pdf_path, titulo, _ = _generar_pdf_por_tipo(report_type)
+                pdf_path, titulo, _ = _generar_pdf_por_tipo(report_type, **params)
         else:
-            pdf_path, titulo, _ = _generar_pdf_por_tipo(report_type)
+            pdf_path, titulo, _ = _generar_pdf_por_tipo(report_type, **params)
 
         if not pdf_path:
             return {'exito': False, 'mensaje': 'Tipo de reporte no disponible.', 'tipo': report_type}
