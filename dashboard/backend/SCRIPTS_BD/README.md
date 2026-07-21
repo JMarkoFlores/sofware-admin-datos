@@ -128,11 +128,11 @@ Devuelve un SELECT con las columnas:
 
 ## Scripts de Reportes
 
-7. `07_sp_reporte_estadisticas_generales.sql` - Crea `sp_reporte_estadisticas_generales` en `Bibliouni`.
-8. `08_sp_reporte_libros_mas_prestados.sql` - Crea `sp_reporte_libros_mas_prestados` en `Bibliouni`.
-9. `09_sp_reporte_multas_pendientes.sql` - Crea `sp_reporte_multas_pendientes` en `Bibliouni`.
-10. `10_sp_reporte_prestamos_vencidos.sql` - Crea `sp_reporte_prestamos_vencidos` en `Bibliouni`.
-11. `11_sp_reporte_libros_danhados.sql` - Crea `sp_reporte_libros_danhados` en `Bibliouni`.
+5. `05_sp_reporte_estadisticas_generales.sql` - Crea `sp_reporte_estadisticas_generales` en `Bibliouni`.
+6. `06_sp_reporte_libros_mas_prestados.sql` - Crea `sp_reporte_libros_mas_prestados` en `Bibliouni`.
+7. `07_sp_reporte_multas_pendientes.sql` - Crea `sp_reporte_multas_pendientes` en `Bibliouni`.
+8. `8_sp_reporte_prestamos_vencidos.sql` - Crea `sp_reporte_prestamos_vencidos` en `Bibliouni`.
+9. `9_sp_reporte_libros_danhados.sql` - Crea `sp_reporte_libros_danhados` en `Bibliouni`.
 
 ### sp_reporte_estadisticas_generales
 
