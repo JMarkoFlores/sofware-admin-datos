@@ -288,48 +288,53 @@ def check_failed_attempts(destination):
 
     alert_info = None
 
-    # Verificar si algún usuario tiene más de 2 intentos fallidos y no tiene alerta pendiente
+    # Verificar si algún usuario tiene más de 2 intentos fallidos
     for username in failed_attempts:
         count = failed_attempts[username]['count']
         print(f"[DEBUG SEGURO] Revisando usuario: {username}, Intentos totales: {count}")
 
-        if count > 2 and username not in pending_alerts:
-            print(f"[DEBUG SEGURO] ¡Se encontraron fallos! Usuario: {username}, Intentos detectados: {count}")
+        if count > 2:
+            already_pending = username in pending_alerts
+            last_count = pending_alerts[username]['count'] if already_pending else 0
 
-            # Almacenar la alerta pendiente
-            pending_alerts[username] = {
-                'timestamp': datetime.now(),
-                'count': count,
-                'notified': False
-            }
-            current_pending_alert_username = username
-            print(f"[DEBUG SEGURO] Alerta pendiente agregada para {username}, marcada como 'notified: False'")
+            # Enviar alerta si es la primera vez que supera 2 intentos o si incrementaron los intentos
+            if not already_pending or count > last_count:
+                print(f"[DEBUG SEGURO] ¡Se encontraron fallos (>2)! Usuario: {username}, Intentos detectados: {count}")
 
-            # Enviar alerta por WhatsApp
-            print(f"[DEBUG SEGURO] Intentando enviar mensaje usando el servicio común de la app al número: {destination}")
-            send_result = send_login_alert(username, count, destination)
+                # Almacenar la alerta pendiente
+                pending_alerts[username] = {
+                    'timestamp': datetime.now(),
+                    'count': count,
+                    'notified': False
+                }
+                current_pending_alert_username = username
+                print(f"[DEBUG SEGURO] Alerta pendiente registrada para {username} con {count} intentos")
 
-            # Registrar en auditoría (ignore if no app context)
-            try:
-                log_auditoria(
-                    'ALERTA',
-                    'Seguridad Login',
-                    f'Se detectaron {count} intentos fallidos para el usuario {username}',
-                    usuario='sistema',
-                    resultado='Alerta'
-                )
-                print(f"[DEBUG SEGURO] Auditoría registrada exitosamente")
-            except Exception as e:
-                print(f"[DEBUG SEGURO] No se pudo registrar en auditoría (no app context?): {e}")
+                # Enviar alerta por WhatsApp
+                print(f"[DEBUG SEGURO] Intentando enviar mensaje al número: {destination}")
+                send_result = send_login_alert(username, count, destination)
 
-            # Guardar información de la alerta
-            alert_info = {
-                'username': username,
-                'count': count,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'destination': destination,
-                'sent': send_result
-            }
+                # Registrar en auditoría
+                try:
+                    log_auditoria(
+                        'ALERTA',
+                        'Seguridad Login',
+                        f'Se detectaron {count} intentos fallidos para el usuario {username}',
+                        usuario='sistema',
+                        resultado='Alerta'
+                    )
+                    print(f"[DEBUG SEGURO] Auditoría registrada exitosamente")
+                except Exception as e:
+                    print(f"[DEBUG SEGURO] No se pudo registrar en auditoría: {e}")
+
+                # Guardar información de la alerta
+                alert_info = {
+                    'username': username,
+                    'count': count,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'destination': destination,
+                    'sent': send_result
+                }
 
     print("[DEBUG SEGURO] =======================================\n")
     return alert_info
