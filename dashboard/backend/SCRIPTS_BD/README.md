@@ -123,3 +123,118 @@ Devuelve un SELECT con las columnas:
 | `indice` | `NVARCHAR` | Nombre del índice |
 | `fragmentacion` | `DECIMAL` | Porcentaje de fragmentación promedio |
 | `paginas` | `BIGINT` | Cantidad de páginas del índice |
+
+---
+
+## Scripts de Reportes
+
+5. `05_sp_reporte_estadisticas_generales.sql` - Crea `sp_reporte_estadisticas_generales` en `Bibliouni`.
+6. `06_sp_reporte_libros_mas_prestados.sql` - Crea `sp_reporte_libros_mas_prestados` en `Bibliouni`.
+7. `07_sp_reporte_multas_pendientes.sql` - Crea `sp_reporte_multas_pendientes` en `Bibliouni`.
+8. `08_sp_reporte_prestamos_vencidos.sql` - Crea `sp_reporte_prestamos_vencidos` en `Bibliouni`.
+9. `09_sp_reporte_libros_danhados.sql` - Crea `sp_reporte_libros_danhados` en `Bibliouni`.
+
+### sp_reporte_estadisticas_generales
+
+Retorna estadísticas generales de la biblioteca.
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_reporte_estadisticas_generales;
+```
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `total_libros` | `INT` | Total de libros registrados |
+| `libros_disponibles` | `INT` | Suma de ejemplares disponibles |
+| `total_autores` | `INT` | Total de autores |
+| `total_categorias` | `INT` | Total de categorías |
+| `total_lectores` | `INT` | Total de lectores |
+| `prestamos_activos` | `INT` | Préstamos en estado activo |
+| `multas_pendientes` | `INT` | Cantidad de multas no pagadas |
+| `monto_multas_pendientes` | `DECIMAL(10,2)` | Monto total de multas pendientes |
+
+### sp_reporte_libros_mas_prestados
+
+Retorna los libros más prestados.
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_reporte_libros_mas_prestados @top_n = 20;
+```
+
+Parámetros:
+- `@top_n` (INT, default 20): Cantidad de libros a retornar (1-100)
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `titulo_libro` | `NVARCHAR` | Título del libro |
+| `total_prestamos` | `INT` | Cantidad total de préstamos |
+
+### sp_reporte_multas_pendientes
+
+Retorna multas pendientes ordenadas por monto.
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_reporte_multas_pendientes @top_n = 20;
+```
+
+Parámetros:
+- `@top_n` (INT, default 20): Cantidad de multas a retornar (1-100)
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `lector` | `NVARCHAR` | Nombre completo del lector |
+| `monto` | `DECIMAL` | Monto de la multa |
+| `motivo` | `NVARCHAR` | Motivo de la multa |
+
+### sp_reporte_prestamos_vencidos
+
+Retorna préstamos vencidos (activos con fecha esperada pasada).
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_reporte_prestamos_vencidos @top_n = 20;
+```
+
+Parámetros:
+- `@top_n` (INT, default 20): Cantidad de préstamos a retornar (1-100)
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `lector` | `NVARCHAR` | Nombre completo del lector |
+| `libro` | `NVARCHAR` | Título del libro |
+| `vencido_desde` | `VARCHAR(10)` | Fecha de vencimiento (YYYY-MM-DD) |
+
+### sp_reporte_libros_danhados
+
+Retorna libros reportados como dañados en los últimos N días.
+
+```sql
+USE Bibliouni;
+GO
+EXEC dbo.sp_reporte_libros_danhados @dias = 30;
+```
+
+Parámetros:
+- `@dias` (INT, default 30): Días a considerar hacia atrás (1-365)
+
+Devuelve un SELECT con las columnas:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `titulo_libro` | `NVARCHAR` | Título del libro |
+| `total_danios` | `INT` | Cantidad de reportes de daño |

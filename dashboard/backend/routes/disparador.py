@@ -784,18 +784,11 @@ def backup_webhook():
     """
     payload = request.get_json() or {}
 
-    # Log completo del payload para diagnóstico
-    import json
-    print(f"[DEBUG Webhook] Payload completo:\n{json.dumps(payload, indent=2, default=str)}")
-
     # Extraer todos los mensajes posibles del payload (soporta varias estructuras)
     mensajes = _extract_message_info_from_payload(payload)
 
     if not mensajes:
-        print("[DEBUG Webhook] No se pudo extraer ningún mensaje del payload")
         return jsonify({'processed': False, 'reason': 'No message found in payload'}), 200
-
-    print(f"[DEBUG Webhook] Se extrajeron {len(mensajes)} mensaje(s) del payload")
 
     resultados = []
 
@@ -803,20 +796,13 @@ def backup_webhook():
         text = _extract_text_from_webhook_message(message)
         numero_remoto = _normalizar_numero_jid(remote_jid)
 
-        print(f"[DEBUG Webhook] Mensaje entrante - remoteJid: {remote_jid}, "
-              f"numero limpio: {numero_remoto}, fromMe: {from_me}, texto: '{text}'")
-        print(f"[DEBUG Webhook] backup_destination actual: '{backup_destination}'")
-
-        # Si no se extrajo texto, loguear los campos del mensaje para diagnóstico
-        if not text:
-            import json
-            print(f"[DEBUG Webhook] Mensaje sin texto extraído. Campos disponibles: {list(message.keys())}")
-            print(f"[DEBUG Webhook] Mensaje completo: {json.dumps(message, indent=2, default=str)}")
+        # Solo loguear si el número coincide con algún destino configurado
+        if numero_remoto in [backup_destination, reports_destination, login_security_destination]:
+            print(f"[DEBUG Webhook] Mensaje entrante - remoteJid: {remote_jid}, "
+                  f"numero limpio: {numero_remoto}, fromMe: {from_me}, texto: '{text}'")
 
         # Ignorar mensajes: propios, sin texto, de grupos (@g.us) o sin número
         if from_me or not text or not numero_remoto or '@g.us' in remote_jid:
-            print(f"[DEBUG Webhook] Mensaje ignorado - fromMe:{from_me}, texto:'{text}', "
-                  f"numero:{numero_remoto}, esGrupo:{'@g.us' in remote_jid}")
             resultados.append({'processed': False, 'reason': 'Ignored'})
             continue
 
@@ -1203,6 +1189,24 @@ def procesar_mensaje_reporte(texto_usuario, numero_usuario):
     Gestiona el flujo de conversación y generación de reportes.
     """
     print(f"[DEBUG Reporte] Procesando mensaje de {numero_usuario}: '{texto_usuario}'")
+
+    # Verificar si el número coincide con el destino configurado
+    if numero_usuario != reports_destination:
+        print(f"[DEBUG Reporte] Número {numero_usuario} no coincide con destino {reports_destination}. Ignorando mensaje.")
+        return {
+            'processed': False,
+            'user': numero_usuario,
+            'reason': 'Número no autorizado'
+        }
+
+    # Verificar si los reportes están habilitados Y el scheduler está corriendo antes de procesar
+    if not reports_is_running or not (reports_daily_enabled or reports_weekly_enabled or reports_monthly_enabled):
+        print(f"[DEBUG Reporte] Reportes deshabilitados o scheduler no iniciado. Ignorando mensaje.")
+        return {
+            'processed': False,
+            'user': numero_usuario,
+            'reason': 'Reportes deshabilitados o scheduler no iniciado'
+        }
 
     # Obtener la conversación
     conv = UserConversation.get_or_create(numero_usuario)
